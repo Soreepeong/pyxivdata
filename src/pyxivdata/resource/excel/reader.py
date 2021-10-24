@@ -1,5 +1,6 @@
 import abc
 import ctypes
+import functools
 import typing
 from bisect import bisect_left
 
@@ -7,7 +8,10 @@ from pyxivdata.common import GameLanguage
 from pyxivdata.escaped_string import SqEscapedString
 from pyxivdata.resource.excel.structures import ExhHeader, ExhColumnDefinition, ExhPageDefinition, ExdHeader, ExdRowLocator, \
     ExdRowHeader, ExhColumnDataType, ExhDepth
-from pyxivdata.sqpack.reader import SqpackReader
+
+if typing.TYPE_CHECKING:
+    from pyxivdata.sqpack.reader import SqpackReader
+    from pyxivdata.sqpack.game_reader import GameReader
 
 
 def transform_column(col: ExhColumnDefinition, fixed_data: bytearray, variable_data: bytearray):
@@ -117,7 +121,7 @@ class ExcelReader:
         GameLanguage.Korean: "_ko",
     }
 
-    def __init__(self, reader: 'SqpackReader', name: str,
+    def __init__(self, reader: typing.Union['SqpackReader', 'GameReader'], name: str,
                  default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None):
         self._reader = reader
         self._name = name
@@ -144,21 +148,16 @@ class ExcelReader:
         )
 
         if default_language is None:
-            default_language = list(GameLanguage)
+            self._default_languages = list(GameLanguage)
         elif isinstance(default_language, GameLanguage):
-            default_language = [default_language]
-        for language in default_language:
-            if language in self._languages:
-                self._language = language
-                break
+            self._default_languages = [default_language]
         else:
-            raise ValueError("Unsupported language")
+            self._default_languages = default_language
+
         self._exd: typing.Dict[typing.Tuple[int, GameLanguage], AbstractExdReader] = {}
 
-    def set_language(self, language: GameLanguage):
-        if language not in self._languages:
-            raise ValueError("Unsupported language")
-        self._language = language
+    def set_default_languages(self, *language: GameLanguage):
+        self._default_languages = language
 
     def _get_page(self, page: ExhPageDefinition, language: GameLanguage):
         exd_key = page.start_id, language
@@ -174,23 +173,40 @@ class ExcelReader:
     def languages(self):
         return self._languages
 
-    def get_ids(self):
-        ids = []
+    @functools.cached_property
+    def ids(self) -> typing.List[int]:
+        ids = set()
         for page in self._pages:
-            ids.extend(self._get_page(page, self._language).get_ids())
-        return ids
+            for language in self.languages:
+                try:
+                    ids.update(self._get_page(page, language).get_ids())
+                except KeyError:
+                    pass
+        return sorted(ids)
 
     def __iter__(self):
         def generator():
             for page in self._pages:
-                yield from self._get_page(page, self._language)
+                for language in self._default_languages:
+                    try:
+                        yield from self._get_page(page, language)
+                        break
+                    except KeyError:
+                        continue
+                else:
+                    raise KeyError("No matching row found among the selected languages.")
 
         return iter(generator())
 
-    def __getitem__(self, item: typing.Union[int, typing.Tuple[GameLanguage, int]]):
+    def __getitem__(
+            self,
+            item: typing.Union[int, typing.Tuple[typing.Union[GameLanguage, typing.Sequence[GameLanguage]], int]]
+    ):
         if isinstance(item, int):
-            item = self._language, item
-        language, row_id = item
+            item = self._default_languages, item
+        languages, row_id = item
+        if isinstance(languages, GameLanguage):
+            languages = [languages]
 
         i = bisect_left(self._pages, row_id + 1, key=lambda x: x.start_id + x.row_count_with_skip)
         if i == len(self._pages):
@@ -200,7 +216,16 @@ class ExcelReader:
         if not (page.start_id <= row_id < page.start_id + page.row_count_with_skip):
             raise KeyError
 
-        return self._get_page(page, language)[row_id]
+        if GameLanguage.Undefined in self.languages:
+            languages = [GameLanguage.Undefined]
+
+        for language in languages:
+            try:
+                return self._get_page(page, language)[row_id]
+            except KeyError:
+                continue
+        else:
+            raise KeyError
 
     @property
     def columns(self):

@@ -112,6 +112,9 @@ class SqpackReader:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
         self._cleanup.close()
 
     def get_locator(self, item: typing.Union[SqPathSpec, str, bytes, os.PathLike]):

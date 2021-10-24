@@ -3,25 +3,6 @@ import os
 import struct
 import typing
 
-GAME_LANGUAGE_CODES = {
-    1: "ja",
-    2: "en",
-    3: "de",
-    4: "fr",
-    5: "chs",
-    6: "cht",
-    7: "ko",
-}
-
-GAME_REGION_CODES = {
-    0: None,
-    1: "JP",
-    2: "US",
-    3: "EU",
-    4: "CN",
-    5: "KR",
-}
-
 PATH_HASH_TABLE = (
     (0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3, 0x0EDB8832,
      0x79DCB8A4, 0xE0D5E91E, 0x97D2D988, 0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91, 0x1DB71064, 0x6AB020F2,
@@ -156,6 +137,18 @@ class GameLanguage(enum.IntEnum):
         return f"{self.name}({self.value})"
 
 
+class GameRegion(enum.IntEnum):
+    Undefined = 0
+    Japan = 1
+    NorthAmerica = 2
+    Europe = 3
+    MainlandChina = 4
+    SouthKorea = 5
+
+    def __str__(self):
+        return f"{self.name}({self.value})"
+
+
 def calculate_path_hash(path: typing.Union[bytes, str, os.PathLike]) -> int:
     if isinstance(path, str):
         path = path.encode("utf-8")
@@ -190,7 +183,7 @@ class SqPathSpec:
                 path_hash: typing.Optional[int] = None,
                 name_hash: typing.Optional[int] = None,
                 full_path_hash: typing.Optional[int] = None):
-        if isinstance(full_path_hash, SqPathSpec):
+        if isinstance(full_path, SqPathSpec):
             self = full_path
         else:
             self = super().__new__(cls)
@@ -241,6 +234,12 @@ class SqPathSpec:
             raise KeyError("full path hash unknown")
         return self._full_path_hash
 
+    @property
+    def full_path(self) -> str:
+        if self._full_path is None:
+            raise KeyError("full path unknown")
+        return self._full_path
+
     def has_path_name_hash(self) -> bool:
         self._resolve_hashes_from_full_path()
         return self._path_hash is not None and self._name_hash is not None
@@ -249,11 +248,8 @@ class SqPathSpec:
         self._resolve_hashes_from_full_path()
         return self._full_path_hash is not None
 
-    @property
-    def full_path(self) -> str:
-        if self._full_path is None:
-            raise KeyError("full path unknown")
-        return self._full_path
+    def has_full_path(self) -> bool:
+        return self._full_path is not None
 
     def __lt__(self, other: 'SqPathSpec'):
         self._resolve_hashes_from_full_path()
@@ -317,11 +313,11 @@ class CorruptDataException(RuntimeError):
 
 
 class AlmostStructureBase:
-    _data: bytearray
+    _data: typing.Union[bytearray, memoryview]
     _offset: int
 
     @classmethod
-    def from_buffer(cls, data: typing.Union[bytearray], offset: int = 0):
+    def from_buffer(cls, data: typing.Union[bytearray, memoryview], offset: int = 0):
         self = cls()
         self._data = data
         self._offset = offset

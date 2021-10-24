@@ -1,7 +1,36 @@
 import ctypes
+import enum
 import typing
 
 from pyxivdata.common import AlmostStructureBase
+
+
+class GameIpcDataCommonEffectType(enum.IntEnum):
+    # https://github.com/SapphireServer/Sapphire/blob/fee9ed6b0593ee2d324a66195b6163b10faf8237/src/common/Common.h#L626-L657
+
+    Nothing = 0
+    Miss = 1
+    FullResist = 2
+    Damage = 3
+    Heal = 4
+    BlockedDamage = 5
+    ParriedDamage = 6
+    Invulnerable = 7
+    NoEffectText = 8
+    Unknown_9 = 9
+    MpLoss = 10
+    MpGain = 11
+    TpLoss = 12
+    TpGain = 13
+    GpGain = 14
+    ApplyStatusEffectTarget = 15
+    ApplyStatusEffectSource = 16  # effect entry on target but buff applies to source, like storm's eye
+    StatusNoEffect = 20  # shifted one up from 5.18
+    StartActionCombo = 27  # shifted one up from 5.18
+    ComboSucceed = 28  # shifted one up from 5.18, on retail this is not seen anymore, still working though.
+    Knockback = 33
+    Mount = 40  # shifted one down from 5.18
+    VFX = 59  # links to VFX sheet
 
 
 class GameIpcDataCommonStatusEffect(ctypes.LittleEndianStructure):
@@ -20,22 +49,62 @@ class GameIpcDataCommonStatusEffect(ctypes.LittleEndianStructure):
 
 class GameIpcDataCommonActionEffect(ctypes.LittleEndianStructure):
     _fields_ = (
-        ("effect_type", ctypes.c_uint8),
+        ("_effect_type", ctypes.c_uint8),
         ("param0", ctypes.c_uint8),
         ("param1", ctypes.c_uint8),
         ("param2", ctypes.c_uint8),
-        ("extended_value_highest_byte", ctypes.c_uint8),
+        ("_extended_value_highest_byte", ctypes.c_uint8),
         ("flags", ctypes.c_uint8),
-        ("value", ctypes.c_uint16),
+        ("_raw_value", ctypes.c_uint16),
     )
 
-    effect_type: int
+    _effect_type: int
     param0: int
     param1: int
     param2: int
-    extended_value_highest_byte: int
+    _extended_value_highest_byte: int
     flags: int
-    value: int
+    _raw_value: int
+
+    @property
+    def effect_type(self) -> GameIpcDataCommonEffectType:
+        return GameIpcDataCommonEffectType(self._effect_type)
+
+    @property
+    def absorbed(self) -> bool:
+        return not not (self.flags & 0x04)
+
+    @property
+    def use_extended_value_byte(self) -> bool:
+        return not not (self.flags & 0x40)
+
+    @property
+    def effect_on_source(self) -> bool:
+        return not not (self.flags & 0x80)
+
+    @property
+    def reflected(self) -> bool:
+        return not not (self.flags & 0xa0)
+
+    @property
+    def critical_hit(self):
+        if self._effect_type == GameIpcDataCommonEffectType.Damage:
+            return not not (self.param0 & 0x01)
+        if self._effect_type == GameIpcDataCommonEffectType.Heal:
+            return not not (self.param1 & 0x01)
+        return False
+
+    @property
+    def direct_hit(self):
+        if self._effect_type == GameIpcDataCommonEffectType.Damage:
+            return not not (self.param0 & 0x02)
+        return False
+
+    @property
+    def value(self) -> int:
+        if self.use_extended_value_byte:
+            return self._extended_value_highest_byte << 16 | self._raw_value
+        return self._raw_value
 
 
 class GameIpcDataCommonPositionVector(ctypes.LittleEndianStructure):
@@ -53,17 +122,19 @@ class GameIpcDataCommonPositionVector(ctypes.LittleEndianStructure):
 class GameIpcDataCommonStatusEffectEntryModificationInfo(ctypes.LittleEndianStructure):
     _fields_ = (
         ("index", ctypes.c_uint8),
-        ("unknown_3", ctypes.c_uint8),  # "unknown1"
+        ("unknown_0x001", ctypes.c_uint8 * 1),
         ("effect_id", ctypes.c_uint16),
-        ("param", ctypes.c_uint16),  # "unknown2"
-        ("unknown_4", ctypes.c_uint16),  # "unknown3"
+        ("param", ctypes.c_uint16),
+        ("unknown_0x006", ctypes.c_uint8 * 2),
         ("duration", ctypes.c_float),
         ("source_actor_id", ctypes.c_uint32)
     )
 
     index: int
+    unknown_0x001: bytes
     effect_id: int
     param: int
+    unknown_0x006: bytes
     duration: float
     source_actor_id: int
 
@@ -167,7 +238,7 @@ class GameIpcDataIpcActionEffect(AlmostStructureBase):
                 GameIpcDataCommonActionEffect.from_buffer(
                     self._data, offset + ctypes.sizeof(GameIpcDataCommonActionEffect) * (i * 8 + j)
                 ) for j in range(8)
-            ] for i in range(effect_slot_count)
+            ] for i in range(self.effect_count)
         ]
 
     @property
@@ -177,7 +248,7 @@ class GameIpcDataIpcActionEffect(AlmostStructureBase):
         except KeyError:
             raise RuntimeError(f"effect_count above {self.effect_count} is unsupported")
         offset = 0x002a + ctypes.sizeof(GameIpcDataCommonActionEffect) * 8 * effect_slot_count + 6
-        return [self._uint32_at(offset + 2 * 4 * i) for i in range(effect_slot_count)]
+        return [self._uint32_at(offset + 2 * 4 * i) for i in range(self.effect_count)]
 
 
 class GameIpcDataIpcUpdateHpMpTp(AlmostStructureBase):
