@@ -139,7 +139,7 @@ class GameIpcDataCommonStatusEffectEntryModificationInfo(ctypes.LittleEndianStru
     source_actor_id: int
 
 
-class GameIpcDataIpcOnPlayerSpawn(AlmostStructureBase):
+class GameIpcDataIpcSpawn(AlmostStructureBase):
     @property
     def name(self) -> str:
         begin_offset = self._offset + 0x0230
@@ -188,7 +188,7 @@ class GameIpcDataIpcOnPlayerSpawn(AlmostStructureBase):
 
     @property
     def position_vector(self) -> GameIpcDataCommonPositionVector:
-        return GameIpcDataCommonPositionVector.from_buffer(self._offset + 0x01fc)
+        return GameIpcDataCommonPositionVector.from_buffer(self._data, self._offset + 0x01fc)
 
 
 class GameIpcDataIpcModelEquip(AlmostStructureBase):
@@ -201,7 +201,7 @@ class GameIpcDataIpcModelEquip(AlmostStructureBase):
         return self._data[self._offset + 0x0012]
 
 
-class GameIpcDataIpcActionEffect(AlmostStructureBase):
+class GameIpcDataIpcEffect(AlmostStructureBase):
     SLOTS_PER_EFFECT_COUNT: typing.ClassVar[typing.Sequence[int]] = (
         8,  # Missed AoE results in 8-slot response.
         1, 8, 8, 8, 8, 8, 8, 8,
@@ -230,7 +230,7 @@ class GameIpcDataIpcActionEffect(AlmostStructureBase):
     def action_effects(self) -> typing.List[typing.List[GameIpcDataCommonActionEffect]]:
         offset = self._offset + 0x002a
         try:
-            effect_slot_count = GameIpcDataIpcActionEffect.SLOTS_PER_EFFECT_COUNT[self.effect_count]
+            effect_slot_count = GameIpcDataIpcEffect.SLOTS_PER_EFFECT_COUNT[self.effect_count]
         except KeyError:
             raise RuntimeError(f"effect_count above {self.effect_count} is unsupported")
         return [
@@ -244,7 +244,7 @@ class GameIpcDataIpcActionEffect(AlmostStructureBase):
     @property
     def targets(self) -> typing.List[int]:
         try:
-            effect_slot_count = GameIpcDataIpcActionEffect.SLOTS_PER_EFFECT_COUNT[self.effect_count]
+            effect_slot_count = GameIpcDataIpcEffect.SLOTS_PER_EFFECT_COUNT[self.effect_count]
         except KeyError:
             raise RuntimeError(f"effect_count above {self.effect_count} is unsupported")
         offset = 0x002a + ctypes.sizeof(GameIpcDataCommonActionEffect) * 8 * effect_slot_count + 6
@@ -261,7 +261,7 @@ class GameIpcDataIpcUpdateHpMpTp(AlmostStructureBase):
         return self._uint16_at(0x0004)
 
 
-class GameIpcDataIpcActorStats(AlmostStructureBase):
+class GameIpcDataIpcPlayerStats(AlmostStructureBase):
     @property
     def max_hp(self) -> int:
         return self._uint32_at(0x0018)
@@ -330,7 +330,7 @@ class GameIpcDataIpcActorControl(AlmostStructureBase):
         return self._uint32_at(0x0014)
 
 
-class GameIpcDataIpcActionEffectResult(AlmostStructureBase):
+class GameIpcDataIpcEffectResult(AlmostStructureBase):
     @property
     def global_sequence_id(self):
         return self._uint32_at(0x0000)

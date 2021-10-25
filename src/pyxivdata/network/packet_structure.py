@@ -1,4 +1,5 @@
 import ctypes
+import datetime
 import enum
 import typing
 
@@ -11,7 +12,7 @@ class ConnectionType(enum.IntEnum):
 class GameMessageBundleHeader(ctypes.LittleEndianStructure):
     _fields_ = (
         ("signature", ctypes.c_char * 16),
-        ("timestamp", ctypes.c_uint64),
+        ("_timestamp", ctypes.c_uint64),
         ("size", ctypes.c_uint32),
         ("_connection_type", ctypes.c_uint16),
         ("message_count", ctypes.c_uint16),
@@ -24,7 +25,7 @@ class GameMessageBundleHeader(ctypes.LittleEndianStructure):
     SIGNATURE_2: typing.ClassVar[bytes] = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
     signature: bytearray
-    timestamp: int
+    _timestamp: int
     size: int
     _connection_type: int
     message_count: int
@@ -39,6 +40,10 @@ class GameMessageBundleHeader(ctypes.LittleEndianStructure):
     @connection_type.setter
     def connection_type(self, value: ConnectionType):
         self._connection_type = value.value
+
+    @property
+    def timestamp(self) -> datetime.datetime:
+        return datetime.datetime.fromtimestamp(self._timestamp, datetime.timezone.utc)
 
 
 class GameMessageHeader(ctypes.LittleEndianStructure):
@@ -61,19 +66,31 @@ class GameMessageHeader(ctypes.LittleEndianStructure):
     unknown_0x00e: bytes
 
 
-class GameIpcMessageDataHeader(ctypes.LittleEndianStructure):
+class GameIpcMessageHeader(GameMessageHeader):
     _fields_ = (
         ("type1", ctypes.c_uint16),
         ("type2", ctypes.c_uint16),
-        ("unknown_0x004", ctypes.c_uint8 * 2),
+        ("unknown_0x014", ctypes.c_uint8 * 2),
         ("server_id", ctypes.c_uint16),
         ("timestamp", ctypes.c_uint32),
-        ("unknown_0x014", ctypes.c_uint8 * 4)
+        ("unknown_0x024", ctypes.c_uint8 * 4)
     )
+
+    TYPE1_IPC = 0x0014
 
     type1: int
     type2: int
-    unknown_0x004: bytes
+    unknown_0x014: bytes
     server_id: int
     timestamp: int
-    unknown_0x014: int
+    unknown_0x024: int
+
+
+class GameKeepAliveMessage(GameMessageHeader):
+    _fields_ = (
+        ("sequence_id", ctypes.c_uint32),
+        ("timestamp", ctypes.c_uint32),
+    )
+
+    sequence_id: int
+    timestamp: int
