@@ -70,6 +70,8 @@ class ExdHeader(ctypes.BigEndianStructure):
         ("padding_0x010", ctypes.c_uint8 * 0x10),
     )
 
+    SIGNATURE: typing.ClassVar[bytes] = b"EXDF"
+
     index_size: int
     data_size: int
 

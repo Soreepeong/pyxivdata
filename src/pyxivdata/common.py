@@ -149,6 +149,13 @@ class GameRegion(enum.IntEnum):
         return f"{self.name}({self.value})"
 
 
+class GameInstallationRegion(enum.Enum):
+    Unknown = "Unknown"
+    Japan = "Japan"
+    MainlandChina = "MainlandChina"
+    SouthKorea = "SouthKorea"
+
+
 def calculate_path_hash(path: typing.Union[bytes, str, os.PathLike]) -> int:
     if isinstance(path, str):
         path = path.encode("utf-8")

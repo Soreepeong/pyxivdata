@@ -1,20 +1,12 @@
-from pyxivdata.common import GameLanguage
 from pyxivdata.escaped_string import SqEscapedString
 from pyxivdata.resource.excel.reader import ExcelReader
 from pyxivdata.resource.excel.structures import ExhDepth
-from pyxivdata.sqpack.game_reader import GameReader
+from pyxivdata.installation.resource_reader import GameResourceReader
+from pyxivdata.resource.font.reader import FontReader
 
 
 def __main__():
-    with GameReader(
-            r"C:\Program Files (x86)\SquareEnix\FINAL FANTASY XIV - A Realm Reborn\game",
-            # r"C:\Program Files (x86)\FINAL FANTASY XIV - KOREA\game",
-            default_language=[
-                GameLanguage.English,
-                GameLanguage.ChineseSimplified,
-                GameLanguage.Korean,
-            ]
-    ) as game:
+    with GameResourceReader() as game:
         print(game.excels[209][4][1])
         print(game.get_action_name(4))
         print(game.get_status_effect_name(4))
@@ -23,6 +15,8 @@ def __main__():
         print(game.get_eobj_name(2000010, plural=True))
         print(game.get_companion_name(12, plural=True))
         print(game.get_world_name(2078))
+        axis18 = FontReader(game["common/font/AXIS_18.fdt"])
+        print(axis18["A"].char, axis18["V"].char, axis18["\uFFFE"].char, axis18["A", "V"])
         files = game["exd/root.exl"].decode("utf-8").splitlines()[1:]
         for i, name in enumerate(files):
             name, *_ = name.split(",")

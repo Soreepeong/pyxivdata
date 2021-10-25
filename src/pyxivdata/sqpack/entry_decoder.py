@@ -3,7 +3,7 @@ import io
 import typing
 import zlib
 
-from pyxivdata.resource.model.structure import ModelHeader
+from pyxivdata.resource.model.structures import ModelHeader
 from pyxivdata.sqpack.structures import SqDataFileEntryHeader, SqDataFileEntryType, SqDataBlockHeaderLocator, \
     SqDataBlockHeader, SqDataTextureBlockHeaderLocator, SqDataModelBlockLocator
 from pyxivdata.resource.texture.structure import TextureHeader
@@ -31,12 +31,7 @@ def decode_entry(fp: typing.Union[typing.BinaryIO, io.RawIOBase], offset: int,
 
 
 def decode_binary_entry(header: SqDataFileEntryHeader, data: bytearray) -> bytearray:
-    locators = [
-        SqDataBlockHeaderLocator.from_buffer(
-            data, ctypes.sizeof(header) + i * ctypes.sizeof(SqDataBlockHeaderLocator)
-        )
-        for i in range(header.block_count_or_version)
-    ]
+    locators = (SqDataBlockHeaderLocator * header.block_count_or_version).from_buffer(data, ctypes.sizeof(header))
     result: typing.List[typing.Optional[bytes]] = [None] * len(locators)
     for i, locator in enumerate(locators):
         offset = header.header_size + locator.offset
@@ -106,14 +101,10 @@ def decode_model_entry(header: SqDataFileEntryHeader, data: bytearray) -> bytear
 
 def decode_texture_entry(header: SqDataFileEntryHeader, data: bytearray) -> bytearray:
     read_offset = ctypes.sizeof(header)
-    locators = [
-        SqDataTextureBlockHeaderLocator.from_buffer(
-            data, read_offset + i * ctypes.sizeof(SqDataTextureBlockHeaderLocator)
-        )
-        for i in range(header.block_count_or_version)
-    ]
+    locators = (SqDataTextureBlockHeaderLocator * header.block_count_or_version
+                ).from_buffer(data, read_offset)
 
-    read_offset += header.block_count_or_version * ctypes.sizeof(SqDataTextureBlockHeaderLocator)
+    read_offset += ctypes.sizeof(locators)
     sub_block_sizes = [
         int.from_bytes(data[read_offset + i * 2:][:2], "little", signed=False)
         for i in range(sum(locator.sub_block_count for locator in locators))

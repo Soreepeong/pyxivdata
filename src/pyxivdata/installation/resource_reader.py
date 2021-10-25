@@ -3,8 +3,9 @@ import os
 import pathlib
 import typing
 
-from pyxivdata.common import SqPathSpec, GameLanguage
+from pyxivdata.common import SqPathSpec, GameLanguage, GameInstallationRegion
 from pyxivdata.escaped_string import SqEscapedString
+from pyxivdata.installation.game_locator import GameInstallation, GameLocator
 from pyxivdata.resource.excel.reader import ExcelReader
 from pyxivdata.sqpack.reader import SqpackReader
 
@@ -27,24 +28,44 @@ EXPAC_DEPENDENT_SQPACKS = ("music", "bg", "cut")
 RAISE_ERROR = object()
 
 
-class GameReader:
-    def __init__(self, game_path: typing.Union[str, os.PathLike],
+class GameResourceReader:
+    _default_languages: typing.List[GameLanguage] = [GameLanguage.Undefined]
+
+    def __init__(self,
+                 installation: typing.Union[GameInstallationRegion, GameInstallation, str, os.PathLike, None] = None,
                  default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None):
-        game_path = pathlib.Path(game_path)
-        if game_path.name != "game":
-            raise ValueError("Path must end in \"game\" folder.")
+        if installation is None:
+            try:
+                installation = GameLocator()[0]
+            except KeyError:
+                raise FileNotFoundError("Game installation not found")
 
-        if default_language is None:
-            self._default_languages = list(GameLanguage)
-        elif isinstance(default_language, GameLanguage):
-            self._default_languages = [default_language]
+        elif isinstance(installation, GameInstallationRegion):
+            try:
+                installation = GameLocator()[installation]
+            except KeyError:
+                raise FileNotFoundError("Game installation not found")
+
+        elif isinstance(installation, GameInstallation):
+            installation = installation
+
+        elif isinstance(installation, (str, os.PathLike)):
+            installation = GameInstallation.from_root_path(installation)
+
         else:
-            self._default_languages = default_language
+            raise TypeError
 
-        self._game_path = game_path
+        self._game_path = installation.game_path
         self._readers: typing.Dict[pathlib.Path, SqpackReader] = {}
         self._open_all_attempted = False
         self._excel_readers: typing.Dict[str, ExcelReader] = {}
+
+        if default_language is None:
+            self._default_languages = list(self.excels["Action"].languages)
+        elif isinstance(default_language, GameLanguage):
+            self._default_languages = [default_language]
+        else:
+            self._default_languages = list(default_language)
 
     def __getitem__(self, item: typing.Union[SqPathSpec, str, bytes, os.PathLike]):
         item = SqPathSpec(item)
@@ -88,14 +109,14 @@ class GameReader:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def close(self):
+    def close(self) -> typing.NoReturn:
         for f in self._readers.values():
             f.close()
         self._readers.clear()
         self._excel_readers.clear()
 
-    def set_default_language(self, *language: GameLanguage):
-        self._default_languages = language
+    def set_default_language(self, *language: GameLanguage) -> typing.NoReturn:
+        self._default_languages = list(language)
         self.get_excel_row.cache_clear()
         for r in self._excel_readers.values():
             r.set_default_languages(*self._default_languages)

@@ -6,15 +6,18 @@ from bisect import bisect_left
 
 from pyxivdata.common import GameLanguage
 from pyxivdata.escaped_string import SqEscapedString
-from pyxivdata.resource.excel.structures import ExhHeader, ExhColumnDefinition, ExhPageDefinition, ExdHeader, ExdRowLocator, \
-    ExdRowHeader, ExhColumnDataType, ExhDepth
+from pyxivdata.resource.excel.structures import ExhHeader, ExhColumnDefinition, ExhPageDefinition, ExdHeader, \
+    ExdRowLocator, ExdRowHeader, ExhColumnDataType, ExhDepth
 
 if typing.TYPE_CHECKING:
     from pyxivdata.sqpack.reader import SqpackReader
-    from pyxivdata.sqpack.game_reader import GameReader
+    from pyxivdata.installation.resource_reader import GameResourceReader
+
+PossibleColumnType = typing.Union[SqEscapedString, bool, int, float]
 
 
-def transform_column(col: ExhColumnDefinition, fixed_data: bytearray, variable_data: bytearray):
+def transform_column(col: ExhColumnDefinition, fixed_data: bytearray, variable_data: bytearray
+                     ) -> PossibleColumnType:
     if col.type == ExhColumnDataType.String:
         string_offset = int.from_bytes(fixed_data[col.offset:col.offset + 4], "big", signed=False)
         return SqEscapedString(variable_data[string_offset:variable_data.index(0, string_offset)])
@@ -51,19 +54,18 @@ class AbstractExdReader(abc.ABC):
         self._reader = reader
         self._data = data
         self._header = ExdHeader.from_buffer(data, 0)
-        self._locators = [
-            ExdRowLocator.from_buffer(data, ctypes.sizeof(self._header) + i)
-            for i in range(0, self._header.index_size, ctypes.sizeof(ExdRowLocator))
-        ]
+        self._locators = (ExdRowLocator * (self._header.index_size // ctypes.sizeof(ExdRowLocator))
+                          ).from_buffer(data, ctypes.sizeof(self._header))
         self._fixed_size = self._reader.header.fixed_data_size
 
     def get_ids(self) -> typing.List[int]:
         return [x.row_id for x in self._locators]
 
-    def __getitem__(self, item: int):
+    def __getitem__(self, item: int) -> typing.Union[typing.List[PossibleColumnType],
+                                                     typing.List[typing.List[PossibleColumnType]]]:
         i = bisect_left(self._locators, item, key=lambda x: x.row_id)
         if i == len(self._locators):
-            return KeyError
+            raise KeyError
 
         locator = self._locators[i]
         if locator.row_id != item:
@@ -78,7 +80,8 @@ class AbstractExdReader(abc.ABC):
 
         return iter(generator())
 
-    def _read_row(self, locator: ExdRowLocator):
+    def _read_row(self, locator: ExdRowLocator) -> typing.Union[typing.List[PossibleColumnType],
+                                                                typing.List[typing.List[PossibleColumnType]]]:
         raise NotImplementedError
 
 
@@ -86,7 +89,10 @@ class ExdReaderForDepth2(AbstractExdReader):
     def __init__(self, data: bytearray, reader: 'ExcelReader'):
         super().__init__(data, reader, ExhDepth.Level2)
 
-    def _read_row(self, locator: ExdRowLocator):
+    def __getitem__(self, item: int) -> typing.List[PossibleColumnType]:
+        return super().__getitem__(item)
+
+    def _read_row(self, locator: ExdRowLocator) -> typing.List[PossibleColumnType]:
         header = ExdRowHeader.from_buffer(self._data, locator.offset)
         data = self._data[locator.offset + ctypes.sizeof(header):][:header.data_size]
         return [transform_column(col, data[:self._fixed_size], data[self._fixed_size:])
@@ -97,7 +103,10 @@ class ExdReaderForDepth3(AbstractExdReader):
     def __init__(self, data: bytearray, reader: 'ExcelReader'):
         super().__init__(data, reader, ExhDepth.Level3)
 
-    def _read_row(self, locator: ExdRowLocator):
+    def __getitem__(self, item: int) -> typing.List[typing.List[PossibleColumnType]]:
+        return super().__getitem__(item)
+
+    def _read_row(self, locator: ExdRowLocator) -> typing.List[typing.List[PossibleColumnType]]:
         header = ExdRowHeader.from_buffer(self._data, locator.offset)
         data = self._data[locator.offset + ctypes.sizeof(header):][:header.data_size]
         variable_data = data[header.sub_row_count * (2 + self._fixed_size):]
@@ -121,7 +130,11 @@ class ExcelReader:
         GameLanguage.Korean: "_ko",
     }
 
-    def __init__(self, reader: typing.Union['SqpackReader', 'GameReader'], name: str,
+    _columns: typing.Union[ctypes.Array[ExhColumnDefinition], typing.Sequence[ExhColumnDefinition]]
+    _pages: typing.Union[ctypes.Array[ExhPageDefinition], typing.Sequence[ExhPageDefinition]]
+    _default_languages: typing.List[GameLanguage] = [GameLanguage.Undefined]
+
+    def __init__(self, reader: typing.Union['SqpackReader', 'GameResourceReader'], name: str,
                  default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None):
         self._reader = reader
         self._name = name
@@ -130,19 +143,14 @@ class ExcelReader:
         self._header = ExhHeader.from_buffer(data, 0)
 
         offset = ctypes.sizeof(self._header)
-        self._columns = tuple(
-            ExhColumnDefinition.from_buffer(data, offset + ctypes.sizeof(ExhColumnDefinition) * i)
-            for i in range(self._header.column_count)
-        )
+        self._columns = (ExhColumnDefinition * self._header.column_count).from_buffer(data, offset)
 
-        offset += len(self._columns) * ctypes.sizeof(ExhColumnDefinition)
-        self._pages = tuple(
-            ExhPageDefinition.from_buffer(data, offset + ctypes.sizeof(ExhPageDefinition) * i)
-            for i in range(self._header.page_count)
-        )
+        offset += ctypes.sizeof(self._columns)
+        self._pages = (ExhPageDefinition * self._header.page_count).from_buffer(data, offset)
 
-        offset += len(self._pages) * ctypes.sizeof(ExhPageDefinition)
-        self._languages = tuple(
+        offset += ctypes.sizeof(self._pages)
+        # noinspection PyTypeChecker
+        self._languages: typing.Tuple[GameLanguage] = tuple(
             GameLanguage(int.from_bytes(data[offset + i * 2:offset + i * 2 + 2], "little"))
             for i in range(self._header.language_count)
         )
@@ -152,14 +160,15 @@ class ExcelReader:
         elif isinstance(default_language, GameLanguage):
             self._default_languages = [default_language]
         else:
-            self._default_languages = default_language
+            self._default_languages = list(default_language)
 
         self._exd: typing.Dict[typing.Tuple[int, GameLanguage], AbstractExdReader] = {}
 
-    def set_default_languages(self, *language: GameLanguage):
-        self._default_languages = language
+    def set_default_languages(self, *language: GameLanguage) -> typing.NoReturn:
+        self._default_languages = list(language)
 
-    def _get_page(self, page: ExhPageDefinition, language: GameLanguage):
+    def _get_page(self, page: ExhPageDefinition, language: GameLanguage
+                  ) -> AbstractExdReader:
         exd_key = page.start_id, language
         if exd_key not in self._exd:
             path = f"exd/{self._name}_{page.start_id}{ExcelReader.LANG_SUFFIX[language]}.exd"
@@ -170,7 +179,7 @@ class ExcelReader:
         return self._exd[exd_key]
 
     @property
-    def languages(self):
+    def languages(self) -> typing.Tuple[GameLanguage]:
         return self._languages
 
     @functools.cached_property
@@ -201,7 +210,7 @@ class ExcelReader:
     def __getitem__(
             self,
             item: typing.Union[int, typing.Tuple[typing.Union[GameLanguage, typing.Sequence[GameLanguage]], int]]
-    ):
+    ) -> typing.Union[typing.List[PossibleColumnType], typing.List[typing.List[PossibleColumnType]]]:
         if isinstance(item, int):
             item = self._default_languages, item
         languages, row_id = item
@@ -228,9 +237,9 @@ class ExcelReader:
             raise KeyError
 
     @property
-    def columns(self):
-        return self._columns
+    def columns(self) -> typing.Tuple[ExhColumnDefinition]:
+        return tuple(self._columns)
 
     @property
-    def header(self):
+    def header(self) -> ExhHeader:
         return self._header

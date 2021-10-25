@@ -39,26 +39,24 @@ class SqIndexReader(typing.ContextManager):
         self._fp.close()
 
     @functools.cached_property
-    def files1(self) -> typing.List[SqIndexFileSegmentEntry]:
+    def files1(self) -> typing.Union[ctypes.Array[SqIndexFileSegmentEntry],
+                                     typing.Sequence[SqIndexFileSegmentEntry]]:
         if self.sqindex_header.index_type != SqIndexType.Index:
             raise KeyError("Not a .index file")
         self._fp.seek(self.sqindex_header.file_segment.offset)
         data = self._fp.read(self.sqindex_header.file_segment.size)
-        return [
-            SqIndexFileSegmentEntry.from_buffer_copy(data, i)
-            for i in range(0, len(data), ctypes.sizeof(SqIndexFileSegmentEntry))
-        ]
+        return (SqIndexFileSegmentEntry * (len(data) // ctypes.sizeof(SqIndexFileSegmentEntry))
+                ).from_buffer_copy(data)
 
     @functools.cached_property
-    def files2(self) -> typing.List[SqIndex2FileSegmentEntry]:
+    def files2(self) -> typing.Union[ctypes.Array[SqIndex2FileSegmentEntry],
+                                     typing.Sequence[SqIndex2FileSegmentEntry]]:
         if self.sqindex_header.index_type != SqIndexType.Index2:
             raise KeyError("Not a .index2 file")
         self._fp.seek(self.sqindex_header.file_segment.offset)
         data = self._fp.read(self.sqindex_header.file_segment.size)
-        return [
-            SqIndex2FileSegmentEntry.from_buffer_copy(data, i)
-            for i in range(0, len(data), ctypes.sizeof(SqIndex2FileSegmentEntry))
-        ]
+        return (SqIndex2FileSegmentEntry * (len(data) // ctypes.sizeof(SqIndex2FileSegmentEntry))
+                ).from_buffer_copy(data)
 
     @functools.cached_property
     def data_files_segment(self) -> bytes:
@@ -71,13 +69,12 @@ class SqIndexReader(typing.ContextManager):
         return self._fp.read(self.sqindex_header.unknown_segment_3.size)
 
     @functools.cached_property
-    def folders(self) -> typing.List[SqIndexFolderSegmentEntry]:
+    def folders(self) -> typing.Union[ctypes.Array[SqIndexFolderSegmentEntry],
+                                      typing.Sequence[SqIndexFolderSegmentEntry]]:
         self._fp.seek(self.sqindex_header.folder_segment.offset)
         data = self._fp.read(self.sqindex_header.folder_segment.size)
-        return [
-            SqIndexFolderSegmentEntry.from_buffer_copy(data, i)
-            for i in range(0, len(data), ctypes.sizeof(SqIndexFolderSegmentEntry))
-        ]
+        return (SqIndexFolderSegmentEntry * (len(data) // ctypes.sizeof(SqIndexFolderSegmentEntry))
+                ).from_buffer_copy(data)
 
 
 class SqpackReader:
