@@ -5,6 +5,9 @@ import typing
 import unicodedata
 
 
+# See: https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS/SHIFTJIS.TXT
+# See: https://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WindowsBestFit/bestfit932.txt
+
 class FdtHeader(ctypes.LittleEndianStructure):
     _fields_ = (
         ("signature", ctypes.c_char * 8),

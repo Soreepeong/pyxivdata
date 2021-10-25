@@ -170,32 +170,14 @@ class AdpcmOffset(ctypes.LittleEndianStructure):
     coef_2: int
 
 
-WAVE_FORMAT_FIELDS = (
-    ("format_tag", ctypes.c_uint16),
-    ("num_channels", ctypes.c_uint16),
-    ("samples_per_sec", ctypes.c_uint32),
-    ("avg_bytes_per_sec", ctypes.c_uint32),
-    ("block_size_align", ctypes.c_uint16),
-    ("bits_per_sample", ctypes.c_uint16),
-)
-
-
 class WaveFormat(ctypes.LittleEndianStructure):
-    _fields_ = WAVE_FORMAT_FIELDS
-
-    format_tag: int
-    num_channels: int
-    samples_per_sec: int
-    avg_bytes_per_sec: int
-    block_size_align: int
-    bits_per_sample: int
-
-
-class WaveFormatEx(ctypes.LittleEndianStructure):
-    _pack_ = 2
     _fields_ = (
-        *WAVE_FORMAT_FIELDS,
-        ("cb_size", ctypes.c_uint16),
+        ("format_tag", ctypes.c_uint16),
+        ("num_channels", ctypes.c_uint16),
+        ("samples_per_sec", ctypes.c_uint32),
+        ("avg_bytes_per_sec", ctypes.c_uint32),
+        ("block_size_align", ctypes.c_uint16),
+        ("bits_per_sample", ctypes.c_uint16),
     )
 
     format_tag: int
@@ -204,25 +186,23 @@ class WaveFormatEx(ctypes.LittleEndianStructure):
     avg_bytes_per_sec: int
     block_size_align: int
     bits_per_sample: int
+
+
+class WaveFormatEx(WaveFormat):
+    _pack_ = 2
+    _fields_ = (
+        ("cb_size", ctypes.c_uint16),
+    )
+
     cb_size: int
 
 
-class AdpcmWaveFormat(ctypes.LittleEndianStructure):
-    _pack_ = 2
+class AdpcmWaveFormat(WaveFormatEx):
     _fields_ = (
-        *WAVE_FORMAT_FIELDS,
-        ("cb_size", ctypes.c_uint16),
         ("samples_per_block", ctypes.c_uint16),
         ("num_coef", ctypes.c_uint16),
     )
 
-    format_tag: int
-    num_channels: int
-    samples_per_sec: int
-    avg_bytes_per_sec: int
-    block_size_align: int
-    bits_per_sample: int
-    cb_size: int
     samples_per_block: int
     num_coef: int
 
