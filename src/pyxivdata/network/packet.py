@@ -9,7 +9,7 @@ class ConnectionType(enum.IntEnum):
     Chat = 2
 
 
-class GameMessageBundleHeader(ctypes.LittleEndianStructure):
+class PacketHeader(ctypes.LittleEndianStructure):
     _fields_ = (
         ("signature", ctypes.c_char * 16),
         ("_timestamp", ctypes.c_uint64),
@@ -46,7 +46,7 @@ class GameMessageBundleHeader(ctypes.LittleEndianStructure):
         return datetime.datetime.fromtimestamp(self._timestamp, datetime.timezone.utc)
 
 
-class GameMessageHeader(ctypes.LittleEndianStructure):
+class MessageHeader(ctypes.LittleEndianStructure):
     _fields_ = (
         ("size", ctypes.c_uint32),
         ("actor_id", ctypes.c_uint32),
@@ -66,7 +66,7 @@ class GameMessageHeader(ctypes.LittleEndianStructure):
     unknown_0x00e: bytes
 
 
-class GameIpcMessageHeader(GameMessageHeader):
+class IpcMessageHeader(MessageHeader):
     _fields_ = (
         ("type1", ctypes.c_uint16),
         ("type2", ctypes.c_uint16),
@@ -86,7 +86,7 @@ class GameIpcMessageHeader(GameMessageHeader):
     unknown_0x024: int
 
 
-class GameKeepAliveMessage(GameMessageHeader):
+class KeepAliveMessage(MessageHeader):
     _fields_ = (
         ("sequence_id", ctypes.c_uint32),
         ("timestamp", ctypes.c_uint32),

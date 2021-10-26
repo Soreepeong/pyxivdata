@@ -22,7 +22,7 @@ def transform_column(col: ExhColumnDefinition, fixed_data: bytearray, variable_d
         string_offset = int.from_bytes(fixed_data[col.offset:col.offset + 4], "big", signed=False)
         return SqEscapedString(variable_data[string_offset:variable_data.index(0, string_offset)])
     elif col.type == ExhColumnDataType.Bool:
-        return not not fixed_data[col.offset]
+        return bool(fixed_data[col.offset])
     elif col.type == ExhColumnDataType.Int8:
         return int.from_bytes(fixed_data[col.offset:col.offset + 1], "big", signed=True)
     elif col.type == ExhColumnDataType.UInt8:

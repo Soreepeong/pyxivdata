@@ -64,12 +64,12 @@ class SqEscapedString:
     _parsed: typing.Optional[str] = None
     _components: typing.Optional[typing.List[typing.Tuple[typing.Union[SqEscapeType, int], any]]]
 
-    def __init__(self, escaped: typing.Optional[bytes] = None,
+    def __init__(self, escaped: typing.Union[bytes, bytearray, memoryview, None] = None,
                  parsed: typing.Optional[str] = None,
-                 components: typing.Optional[typing.List[bytes]] = None):
-        self._escaped = escaped
+                 components: typing.Optional[typing.Sequence[typing.Union[bytes, bytearray, memoryview]]] = None):
+        self._escaped = None if escaped is None else bytes(escaped)
         self._parsed = parsed
-        self._components = components
+        self._components = None if components is None else [bytes(x) for x in components]
 
     @property
     def escaped(self) -> typing.Optional[bytes]:

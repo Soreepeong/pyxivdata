@@ -23,7 +23,7 @@ class FontReader:
 
         self._kerning_table_header = KerningTableHeader.from_buffer(data, header.kerning_table_header_offset)
         if self._kerning_table_header.signature != KerningTableHeader.SIGNATURE:
-            raise CorruptDataException("Bad font table signature")
+            raise CorruptDataException("Bad kerning table signature")
 
         if self._kerning_table_header.count != self._font_table_header.kerning_table_entry_count:
             raise CorruptDataException(

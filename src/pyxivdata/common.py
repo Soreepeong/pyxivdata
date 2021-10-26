@@ -317,27 +317,3 @@ class SqPathSpec:
 
 class CorruptDataException(RuntimeError):
     pass
-
-
-class AlmostStructureBase:
-    _data: typing.Union[bytearray, memoryview]
-    _offset: int
-
-    @classmethod
-    def from_buffer(cls, data: typing.Union[bytearray, memoryview], offset: int = 0):
-        self = cls()
-        self._data = data
-        self._offset = offset
-        return self
-
-    def _uint32_at(self, offset: int) -> int:
-        begin_offset = self._offset + offset
-        return int.from_bytes(self._data[begin_offset:begin_offset + 4], "little", signed=False)
-
-    def _uint16_at(self, offset: int) -> int:
-        begin_offset = self._offset + offset
-        return int.from_bytes(self._data[begin_offset:begin_offset + 2], "little", signed=False)
-
-    def _float_at(self, offset: int) -> float:
-        begin_offset = self._offset + offset
-        return struct.unpack("<f", self._data[begin_offset:begin_offset + 4])[0]
