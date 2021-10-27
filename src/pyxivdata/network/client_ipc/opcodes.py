@@ -16,5 +16,6 @@ class ClientIpcOpcodes:
     RequestAction: typing.Optional[int] = 0x02dc
     RequestActionFromCoordinates: typing.Optional[int] = 0x0152
     RequestEmote: typing.Optional[int] = None
-    RequestTell: typing.Optional[int] = None
+    RequestTell: typing.Optional[int] = 0x0064
     RequestChat: typing.Optional[int] = None
+    RequestChatParty: typing.Optional[int] = 0x0065

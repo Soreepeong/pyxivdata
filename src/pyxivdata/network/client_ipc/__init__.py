@@ -168,3 +168,17 @@ class IpcRequestChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="R
     @property
     def message(self) -> SqEscapedString:
         return SqEscapedString(self._message.rstrip(b'\0'))
+
+
+class IpcRequestChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="RequestChatParty"):
+    _fields_ = (
+        ("unknown_0x000", ctypes.c_uint8 * 8),
+        ("_message", ctypes.c_char * 1024),
+    )
+
+    unknown_0x000: bytearray
+    _message: bytearray
+
+    @property
+    def message(self) -> SqEscapedString:
+        return SqEscapedString(self._message.rstrip(b'\0'))

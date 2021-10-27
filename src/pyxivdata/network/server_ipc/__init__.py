@@ -11,23 +11,26 @@ from pyxivdata.network.server_ipc.opcodes import ServerIpcOpcodes
 
 
 class IpcEffectStub(ctypes.LittleEndianStructure):
+    _pack_ = 2
     _fields_ = (
         ("animation_target_id", ctypes.c_uint32),
+        ("unknown_0x004", ctypes.c_uint8 * 4),
         ("action_id", ctypes.c_uint32),
         ("global_sequence_id", ctypes.c_uint32),
         ("animation_lock_duration", ctypes.c_float),
         ("some_target_id", ctypes.c_uint32),
-        ("source_sequence_id", ctypes.c_uint32),
+        ("source_sequence_id", ctypes.c_uint16),
         ("rotation_uint16", ctypes.c_uint16),
         ("animation_id", ctypes.c_uint16),
         ("animation_variation", ctypes.c_uint8),
         ("_effect_display_type", ctypes.c_uint8),
-        ("unknown_0x01e", ctypes.c_uint8 * 1),
+        ("unknown_0x020", ctypes.c_uint8 * 1),
         ("effect_count", ctypes.c_uint8),
-        ("padding_0x020", ctypes.c_uint8 * 8),
+        ("padding_0x022", ctypes.c_uint8 * 8),
     )
 
     animation_target_id: int
+    unknown_0x004: bytearray
     action_id: int
     global_sequence_id: int
     animation_lock_duration: float
@@ -54,10 +57,13 @@ class IpcEffectStub(ctypes.LittleEndianStructure):
         return EffectDisplayType(self._effect_display_type)
 
     @property
-    def valid_effects_per_target(self) -> typing.Dict[int, typing.List[ActionEffect]]:
+    def valid_known_effects_per_target(self) -> typing.Dict[int, typing.List[ActionEffect]]:
         return {
-            target: [effect for effect in effects if effect.effect_type != EffectType.Nothing]
-            for target, effects in zip(self.targets[:self.effect_count], self.action_effects[:self.effect_count])
+            target.actor_id: [
+                effect
+                for effect in effects
+                if effect.known_effect_type not in (EffectType.Nothing, None)
+            ] for target, effects in zip(self.target_ids[:self.effect_count], self.effects[:self.effect_count])
         }
 
 
@@ -66,7 +72,7 @@ class IpcEffect01(IpcEffectStub, IpcStructure, opcode_field="Effect01"):
         ("effects", ActionEffect * 8 * 1),
         ("padding_var_1", ctypes.c_uint8 * 6),
         ("target_ids", ActionEffectTarget * 1),
-        ("padding_var_2", ctypes.c_uint8 * 4),
+        ("padding_var_2", ctypes.c_uint8 * 4)
     )
 
 
@@ -262,13 +268,40 @@ class IpcChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Cha
         return SqEscapedString(self._message.rstrip(b'\0'))
 
 
+class IpcChatTell(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ChatTell"):
+    _fields_ = (
+        ("character_id", ctypes.c_uint32),
+        ("unknown_0x004", ctypes.c_uint8 * 4),
+        ("world_id", ctypes.c_uint8),
+        ("unknown_0x009", ctypes.c_uint8 * 2),
+        ("_name", ctypes.c_char * 32),
+        ("_message", ctypes.c_char * 1029),
+    )
+
+    character_id: int
+    unknown_0x004: bytearray
+    world_id: int
+    unknown_0x009: bytearray
+    _name: bytearray
+    _message: bytearray
+
+    @property
+    def name(self) -> str:
+        return self._name.decode("utf-8")
+
+    @property
+    def message(self) -> SqEscapedString:
+        return SqEscapedString(self._message.rstrip(b'\0'))
+
+
 class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PartyList"):
     class Member(ctypes.LittleEndianStructure):
         _fields_ = (
             ("_name", ctypes.c_char * 32),
             ("content_id", ctypes.c_uint64),
             ("character_id", ctypes.c_uint32),
-            ("unknown_0x02c", ctypes.c_uint8 * 8),
+            ("some_actor_id_1", ctypes.c_uint32),
+            ("some_actor_id_2", ctypes.c_uint32),
             ("hp", ctypes.c_uint32),
             ("max_hp", ctypes.c_uint32),
             ("mp", ctypes.c_uint16),
@@ -282,10 +315,13 @@ class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Par
             ("unknown_0x048", ctypes.c_uint8 * 368),
         )
 
+        # TODO: find coordinates
+
         _name: bytearray
         content_id: int
         character_id: int
-        unknown_0x02c: bytearray
+        some_actor_id_1: int
+        some_actor_id_2: int
         hp: int
         max_hp: int
         mp: int
@@ -316,6 +352,33 @@ class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Par
     content_id_2: int
     leader_index: int
     party_size: int
+    padding_var_1: bytearray
+
+
+class IpcAllianceList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="AllianceList"):
+    class Member(ctypes.LittleEndianStructure):
+        _fields_ = (
+            ("_name", ctypes.c_char * 32),
+            ("character_id", ctypes.c_uint32),
+            ("unknown_0x024", ctypes.c_uint8 * 16),
+        )
+
+        # TODO: find coordinates
+
+        _name: bytearray
+        character_id: int
+        unknown_0x024: bytearray
+
+        @property
+        def name(self) -> str:
+            return self._name.decode("utf-8")
+
+    _fields_ = (
+        ("members", Member * 16),
+        ("padding_var_1", ctypes.c_uint8 * 4)
+    )
+
+    members: typing.Sequence[Member]
     padding_var_1: bytearray
 
 
@@ -381,7 +444,7 @@ class IpcActorCast(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Act
 
 class IpcActorControlStub(ctypes.LittleEndianStructure, IpcStructure):
     _fields_ = (
-        ("_type", ctypes.c_uint16),
+        ("type", ctypes.c_uint16),
         ("padding_0x002", ctypes.c_uint8 * 2),
         ("param1", ctypes.c_uint32),
         ("param2", ctypes.c_uint32),
@@ -389,7 +452,7 @@ class IpcActorControlStub(ctypes.LittleEndianStructure, IpcStructure):
         ("param4", ctypes.c_uint32),
     )
 
-    _type: int
+    type: int
     padding_0x002: bytearray
     param1: int
     param2: int
@@ -397,8 +460,11 @@ class IpcActorControlStub(ctypes.LittleEndianStructure, IpcStructure):
     param4: int
 
     @property
-    def type(self) -> ActorControlType:
-        return ActorControlType(self._type)
+    def known_type(self) -> typing.Optional[ActorControlType]:
+        try:
+            return ActorControlType(self.type)
+        except ValueError:
+            return None
 
 
 class IpcActorControl(IpcActorControlStub, IpcStructure, opcode_field="ActorControl"):
@@ -588,6 +654,8 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
         ("voice", ctypes.c_uint8),
         ("unknown_0x084", ctypes.c_uint8 * 2),
         ("enemy_type", ctypes.c_uint8),
+        ("unknown_which", ctypes.c_uint8 * 4),  # somewhere in this block
+
         ("level", ctypes.c_uint8),
         ("class_or_job", ctypes.c_uint8),
         ("unknown_0x089", ctypes.c_uint8 * 3),
@@ -598,7 +666,7 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
 
         ("mount_color", ctypes.c_uint8),
         ("scale", ctypes.c_uint8),
-        ("elementData", ctypes.c_uint8 * 6),
+        ("element_data", ctypes.c_uint8 * 6),
         ("status_effects", StatusEffect * 30),
         ("position_vector", PositionVector),
         ("models", ctypes.c_uint32 * 10),
@@ -656,13 +724,13 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
     mount_feet: int
     mount_color: int
     scale: int
-    elementData: int
+    element_data: int
     status_effects: typing.Sequence[StatusEffect]
     position_vector: PositionVector
     models: typing.Sequence[int]
-    _name: bytearray
+    name: bytearray
     look: typing.Sequence[int]
-    _fc_tag: bytearray
+    fc_tag: bytearray
     unknown_var_1: bytearray
 
     @property
@@ -727,6 +795,8 @@ class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field=
         ("voice", ctypes.c_uint8),
         ("unknown_0x084", ctypes.c_uint8 * 2),
         ("enemy_type", ctypes.c_uint8),
+        ("unknown_which", ctypes.c_uint8 * 4),  # somewhere in this block
+
         ("level", ctypes.c_uint8),
         ("class_or_job", ctypes.c_uint8),
         ("unknown_0x089", ctypes.c_uint8 * 3),
@@ -826,15 +896,11 @@ class IpcActorStats(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
         ("hp", ctypes.c_uint32),
         ("mp", ctypes.c_uint16),
         ("tp", ctypes.c_uint16),
-        ("gp", ctypes.c_uint16),
-        ("unknown_0x010", ctypes.c_uint8 * 6),
     )
 
     hp: int
     mp: int
     tp: int
-    gp: int
-    unknown_0x010: bytearray
 
 
 class IpcActorStatusEffectList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ActorStatusEffectList"):
@@ -842,22 +908,22 @@ class IpcActorStatusEffectList(ctypes.LittleEndianStructure, IpcStructure, opcod
         ("class_or_job", ctypes.c_uint8),
         ("level1", ctypes.c_uint8),
         ("level", ctypes.c_uint16),
-        ("current_hp", ctypes.c_uint32),
+        ("hp", ctypes.c_uint32),
         ("max_hp", ctypes.c_uint32),
-        ("current_mp", ctypes.c_uint16),
+        ("mp", ctypes.c_uint16),
         ("max_mp", ctypes.c_uint16),
         ("shield_percentage", ctypes.c_uint8),
         ("unknown_0x011", ctypes.c_uint8 * 3),
         ("effects", StatusEffect * 30),
-        ("unknown_var_1", ctypes.c_uint8),
+        ("unknown_var_1", ctypes.c_uint8 * 4),
     )
 
     class_or_job: int
     level1: int
     level: int
-    current_hp: int
+    hp: int
     max_hp: int
-    current_mp: int
+    mp: int
     max_mp: int
     shield_percentage: int
     unknown_0x011: bytearray
@@ -871,28 +937,26 @@ class IpcActorStatusEffectList2(ctypes.LittleEndianStructure, IpcStructure, opco
         ("class_or_job", ctypes.c_uint8),
         ("level1", ctypes.c_uint8),
         ("level", ctypes.c_uint16),
-        ("current_hp", ctypes.c_uint32),
+        ("hp", ctypes.c_uint32),
         ("max_hp", ctypes.c_uint32),
-        ("current_mp", ctypes.c_uint16),
+        ("mp", ctypes.c_uint16),
         ("max_mp", ctypes.c_uint16),
         ("shield_percentage", ctypes.c_uint8),
         ("unknown_0x015", ctypes.c_uint8 * 3),
         ("effects", StatusEffect * 30),
-        ("unknown_var_1", ctypes.c_uint8),
     )
 
     unknown_0x000: int
     class_or_job: int
     level1: int
     level: int
-    current_hp: int
+    hp: int
     max_hp: int
-    current_mp: int
+    mp: int
     max_mp: int
     shield_percentage: int
     unknown_0x015: bytearray
     effects: typing.Sequence[StatusEffect]
-    unknown_var_1: bytearray
 
 
 class IpcActorStatusEffectListBoss(ctypes.LittleEndianStructure, IpcStructure,
@@ -902,23 +966,23 @@ class IpcActorStatusEffectListBoss(ctypes.LittleEndianStructure, IpcStructure,
         ("class_or_job", ctypes.c_uint8),
         ("level1", ctypes.c_uint8),
         ("level", ctypes.c_uint16),
-        ("current_hp", ctypes.c_uint32),
+        ("hp", ctypes.c_uint32),
         ("max_hp", ctypes.c_uint32),
-        ("current_mp", ctypes.c_uint16),
+        ("mp", ctypes.c_uint16),
         ("max_mp", ctypes.c_uint16),
         ("shield_percentage", ctypes.c_uint8),
         ("unknown_var_1", ctypes.c_uint8 * 3),
         ("effects_1", StatusEffect * 30),
-        ("unknown_var_2", ctypes.c_uint8),
+        ("unknown_var_2", ctypes.c_uint8 * 4),
     )
 
     effects_2: typing.Sequence[StatusEffect]
     class_or_job: int
     level1: int
     level: int
-    current_hp: int
+    hp: int
     max_hp: int
-    current_mp: int
+    mp: int
     max_mp: int
     shield_percentage: int
     unknown_var_1: bytearray
@@ -943,12 +1007,14 @@ class IpcAggroList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Agg
         unknown_0x005: bytearray
 
     _fields_ = (
-        ("entry_count", ctypes.c_uint32),
+        ("entry_count", ctypes.c_uint8),
+        ("unknown_0x001", ctypes.c_uint8 * 3),
         ("entries", Entry * 32),
         ("padding_0x104", ctypes.c_uint32),
     )
 
     entry_count: int
+    unknown_0x001: bytearray
     entries: typing.Sequence[Entry]
     padding_0x104: bytearray
 
@@ -964,12 +1030,14 @@ class IpcAggroRank(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Agg
         enmity: int
 
     _fields_ = (
-        ("entry_count", ctypes.c_uint32),
+        ("entry_count", ctypes.c_uint8),
+        ("unknown_0x001", ctypes.c_uint8 * 3),
         ("entries", Entry * 32),
         ("padding_0x104", ctypes.c_uint32),
     )
 
     entry_count: int
+    unknown_0x001: bytearray
     entries: typing.Sequence[Entry]
     padding_0x104: bytearray
 
@@ -989,7 +1057,7 @@ class IpcInitZone(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Init
         ("additional_festival_id", ctypes.c_uint16),
         ("unknown_0x024", ctypes.c_uint8 * 40),
         ("position_vector", PositionVector),
-        ("unknown_0x088", ctypes.c_uint8 * 16),
+        ("unknown_0x050", ctypes.c_uint8 * 16),
     )
 
     server_id: int
@@ -1005,7 +1073,7 @@ class IpcInitZone(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Init
     additional_festival_id: int
     unknown_0x024: bytearray
     position_vector: PositionVector
-    unknown_0x088: bytearray
+    unknown_0x050: bytearray
 
 
 class IpcPlaceWaymark(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PlaceWaymark"):

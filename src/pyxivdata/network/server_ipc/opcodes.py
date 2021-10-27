@@ -23,11 +23,13 @@ class ServerIpcOpcodes:
     PlayerParams: typing.Optional[int] = 0x0295
 
     Chat: typing.Optional[int] = None
-    ChatParty: typing.Optional[int] = None
+    ChatParty: typing.Optional[int] = 0x0065
+    ChatTell: typing.Optional[int] = 0x0064
     # ServerNoticeShort: typing.Optional[int] = None
     # ServerNotice: typing.Optional[int] = None
 
-    PartyList: typing.Optional[int] = None
+    PartyList: typing.Optional[int] = 0x0349
+    AllianceList: typing.Optional[int] = 0x021d
 
     ActorCast: typing.Optional[int] = 0x015d
     ActorControl: typing.Optional[int] = 0x00b0
@@ -47,10 +49,11 @@ class ServerIpcOpcodes:
     ActorStatusEffectListBoss: typing.Optional[int] = 0x0223
 
     # TODO: How are these two different? One is incoming and one is outgoing?
-    AggroList: typing.Optional[int] = None
+    # TODO: Does AggroRank even get used anymore?
+    AggroList: typing.Optional[int] = 0x0243
     AggroRank: typing.Optional[int] = None
 
-    InitZone: typing.Optional[int] = None
+    InitZone: typing.Optional[int] = 0x0320
 
     PlaceWaymark: typing.Optional[int] = 0x0371
     PlacePresetWaymark: typing.Optional[int] = 0x026d

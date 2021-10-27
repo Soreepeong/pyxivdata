@@ -17,9 +17,16 @@ class ActorControlEffectOverTime(ActorControlBase):
     def __init__(self, data: IpcActorControl):
         super().__init__(data)
         self.buff_id = data.param1
-        self.effect_type = EffectType(data.param2)
+        self.effect_type = data.param2
         self.amount = data.param3
         self.source_actor_id = data.param4
+
+    @property
+    def known_effect_type(self) -> typing.Optional[EffectType]:
+        try:
+            return EffectType(self.effect_type)
+        except ValueError:
+            return None
 
 
 class ActorControlDeath(ActorControlBase):

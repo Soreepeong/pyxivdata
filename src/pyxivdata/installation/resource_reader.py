@@ -25,8 +25,6 @@ SQPACK_CATEGORY_MAP = {
 }
 EXPAC_DEPENDENT_SQPACKS = ("music", "bg", "cut")
 
-RAISE_ERROR = object()
-
 
 class GameResourceReader:
     _default_languages: typing.List[GameLanguage] = [GameLanguage.Undefined]
@@ -180,11 +178,11 @@ class GameResourceReader:
 
     def get_excel_string(self, excel_name: str, row_id: int, column_index: int,
                          language: typing.Optional[GameLanguage] = None,
-                         fallback_format: typing.Optional[str] = RAISE_ERROR,
+                         fallback_format: typing.Optional[str] = None,
                          plural_column_index: typing.Optional[int] = None) -> SqEscapedString:
         res = self.get_excel_row(excel_name, row_id, language)
         if res is None:
-            if fallback_format is RAISE_ERROR:
+            if fallback_format is None:
                 raise
             return SqEscapedString(parsed=fallback_format.format(row_id), components=[])
         if plural_column_index is None or res[plural_column_index].escaped == b"":
@@ -192,32 +190,43 @@ class GameResourceReader:
         return res[plural_column_index]
 
     def get_action_name(self, action_id: int, language: typing.Optional[GameLanguage] = None,
-                        fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                        fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("Action", action_id, 0, language, fallback_format)
 
     def get_action_description(self, action_id: int, language: typing.Optional[GameLanguage] = None,
-                               fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                               fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("ActionTransient", action_id, 0, language, fallback_format)
 
     def get_status_effect_name(self, status_effect_id: int, language: typing.Optional[GameLanguage] = None,
-                               fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                               fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("Status", status_effect_id, 0, language, fallback_format)
 
     def get_status_effect_description(self, status_effect_id: int, language: typing.Optional[GameLanguage] = None,
-                                      fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                                      fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("Status", status_effect_id, 1, language, fallback_format)
 
     def get_bnpc_name(self, index: int, language: typing.Optional[GameLanguage] = None, plural: bool = False,
-                      fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                      fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("BNpcName", index, 0, language, fallback_format, 2 if plural else None)
 
     def get_eobj_name(self, index: int, language: typing.Optional[GameLanguage] = None, plural: bool = False,
-                      fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                      fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("EObjName", index, 0, language, fallback_format, 2 if plural else None)
 
     def get_companion_name(self, index: int, language: typing.Optional[GameLanguage] = None, plural: bool = False,
-                           fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+                           fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("Companion", index, 0, language, fallback_format, 2 if plural else None)
 
-    def get_world_name(self, index: int, fallback_format: typing.Optional[str] = RAISE_ERROR) -> SqEscapedString:
+    def get_world_name(self, index: int, fallback_format: typing.Optional[str] = None) -> SqEscapedString:
         return self.get_excel_string("World", index, 0, GameLanguage.Undefined, fallback_format)
+
+    def get_territory_name(self, territory_id: int, language: typing.Optional[GameLanguage] = None,
+                           title_form: bool = True, fallback_format: typing.Optional[str] = None
+                           ) -> SqEscapedString:
+        territory = self.get_excel_row("TerritoryType", territory_id, GameLanguage.Undefined)
+        if territory is None:
+            if fallback_format is None:
+                raise KeyError
+            return SqEscapedString(parsed=fallback_format.format(territory_id), components=())
+        placename_index = territory[5]
+        return self.get_excel_string("PlaceName", placename_index, 0, language, fallback_format, 0 if title_form else 2)

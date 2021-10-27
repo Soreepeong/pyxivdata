@@ -43,7 +43,18 @@ class SqEscapeType(enum.IntEnum):
     Unknown_19 = 0x19
     Unknown_26 = 0x26
     Unknown_2d = 0x2d
+
+    # The Orbonne Monastery(33f20b30):
+    #     Completion (category=0x33=51)
+    #         Lookup column(2) specified (PlaceName[20-37,39-59,...,2864-2864,...])
+    #     PlaceName (row_id=0xb30=2864)
+    # Let's do it!(02f0e3)
+    #     Completion (category=2, row_id=0xE3=227)
+    # Let's rest for a while.(08f2033a)
+    #     Completion (category=8, row_id=0x033a=826)
+    # <se.##>(c9 06 ##)
     Unknown_2e = 0x2e
+
     Unknown_2f = 0x2f
     Unknown_32 = 0x32
     Unknown_33 = 0x33

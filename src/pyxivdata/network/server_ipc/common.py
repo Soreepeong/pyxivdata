@@ -1,4 +1,5 @@
 import ctypes
+import typing
 
 from pyxivdata.network.enums import EffectType
 
@@ -19,7 +20,7 @@ class StatusEffect(ctypes.LittleEndianStructure):
 
 class ActionEffect(ctypes.LittleEndianStructure):
     _fields_ = (
-        ("_effect_type", ctypes.c_uint8),
+        ("effect_type", ctypes.c_uint8),
         ("param0", ctypes.c_uint8),
         ("param1", ctypes.c_uint8),
         ("param2", ctypes.c_uint8),
@@ -28,7 +29,7 @@ class ActionEffect(ctypes.LittleEndianStructure):
         ("_raw_value", ctypes.c_uint16),
     )
 
-    _effect_type: int
+    effect_type: int
     param0: int
     param1: int
     param2: int
@@ -37,8 +38,11 @@ class ActionEffect(ctypes.LittleEndianStructure):
     _raw_value: int
 
     @property
-    def effect_type(self) -> EffectType:
-        return EffectType(self._effect_type)
+    def known_effect_type(self) -> typing.Optional[EffectType]:
+        try:
+            return EffectType(self.effect_type)
+        except ValueError:
+            return None
 
     @property
     def absorbed(self) -> bool:

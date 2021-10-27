@@ -28,29 +28,32 @@ class ActionType(enum.IntEnum):
 class EffectType(enum.IntEnum):
     # https://github.com/SapphireServer/Sapphire/blob/fee9ed6b0593ee2d324a66195b6163b10faf8237/src/common/Common.h#L626-L657
 
-    Nothing = 0
-    Miss = 1
-    FullResist = 2
-    Damage = 3
-    Heal = 4
-    BlockedDamage = 5
-    ParriedDamage = 6
-    Invulnerable = 7
-    NoEffectText = 8
-    Unknown_9 = 9
-    MpLoss = 10
-    MpGain = 11
-    TpLoss = 12
-    TpGain = 13
-    GpGain = 14
-    ApplyStatusEffectTarget = 15
-    ApplyStatusEffectSource = 16  # effect entry on target but buff applies to source, like storm's eye
-    StatusNoEffect = 20  # shifted one up from 5.18
-    StartActionCombo = 27  # shifted one up from 5.18
-    ComboSucceed = 28  # shifted one up from 5.18, on retail this is not seen anymore, still working though.
-    Knockback = 33
-    Mount = 40  # shifted one down from 5.18
-    VFX = 59  # links to VFX sheet
+    Nothing = 0x00
+    Miss = 0x01
+    FullResist = 0x02
+    Damage = 0x03
+    Heal = 0x04
+    BlockedDamage = 0x05
+    ParriedDamage = 0x06
+    Invulnerable = 0x07
+    NoEffectText = 0x08
+    Unknown_0x09 = 0x09
+    MpLoss = 0x0a
+    MpGain = 0x0b
+    TpLoss = 0x0c
+    TpGain = 0x0d
+    GpGain = 0x0e
+    ApplyStatusEffectTarget = 0x0f
+    ApplyStatusEffectSource = 0x10  # effect entry on target but buff applies to source, like storm's eye
+    StatusNoEffect = 0x14  # shifted one up from 5.18
+    StartActionCombo = 0x1b  # shifted one up from 5.18
+    ComboSucceed = 0x1c  # shifted one up from 5.18, on retail this is not seen anymore, still working though.
+    Knockback = 0x21
+    Mount = 0x28  # shifted one down from 5.18
+    Unknown_0x34 = 0x34
+    VFX = 0x3b  # links to VFX sheet
+    Unknown_0x3c = 0x3c
+    Unknown_0x42 = 0x42
 
 
 class TargetMarkerType(enum.IntEnum):

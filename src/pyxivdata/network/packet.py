@@ -11,7 +11,7 @@ class ConnectionType(enum.IntEnum):
 
 class PacketHeader(ctypes.LittleEndianStructure):
     _fields_ = (
-        ("signature", ctypes.c_char * 16),
+        ("signature", ctypes.c_uint8 * 16),
         ("_timestamp", ctypes.c_uint64),
         ("size", ctypes.c_uint32),
         ("_connection_type", ctypes.c_uint16),
@@ -43,7 +43,7 @@ class PacketHeader(ctypes.LittleEndianStructure):
 
     @property
     def timestamp(self) -> datetime.datetime:
-        return datetime.datetime.fromtimestamp(self._timestamp, datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(self._timestamp / 1000, datetime.timezone.utc)
 
 
 class MessageHeader(ctypes.LittleEndianStructure):
