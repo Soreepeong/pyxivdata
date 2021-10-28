@@ -22,20 +22,21 @@ class ServerIpcOpcodes:
     # PlayerSetup: typing.Optional[int] = 0x01d5
     PlayerParams: typing.Optional[int] = 0x0295
 
-    Chat: typing.Optional[int] = None
+    Chat: typing.Optional[int] = 0x00fe
     ChatParty: typing.Optional[int] = 0x0065
     ChatTell: typing.Optional[int] = 0x0064
     # ServerNoticeShort: typing.Optional[int] = None
     # ServerNotice: typing.Optional[int] = None
 
     PartyList: typing.Optional[int] = 0x0349
+    PartyModify: typing.Optional[int] = 0x00a4
     AllianceList: typing.Optional[int] = 0x021d
 
     ActorCast: typing.Optional[int] = 0x015d
     ActorControl: typing.Optional[int] = 0x00b0
     ActorControlSelf: typing.Optional[int] = 0x02b6
     ActorControlTarget: typing.Optional[int] = 0x03c5
-    ActorDespawn: typing.Optional[int] = None
+    ActorDespawn: typing.Optional[int] = 0x00b5
     ActorModelEquip: typing.Optional[int] = 0x03a2
     ActorMove: typing.Optional[int] = 0x00f8
     # ActorOwner: typing.Optional[int] = None
@@ -54,6 +55,8 @@ class ServerIpcOpcodes:
     AggroRank: typing.Optional[int] = None
 
     InitZone: typing.Optional[int] = 0x0320
+
+    DirectorUpdate: typing.Optional[int] = 0x0154
 
     PlaceWaymark: typing.Optional[int] = 0x0371
     PlacePresetWaymark: typing.Optional[int] = 0x026d

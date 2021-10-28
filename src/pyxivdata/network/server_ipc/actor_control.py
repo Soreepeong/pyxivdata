@@ -11,6 +11,14 @@ class ActorControlBase(abc.ABC):
         self.data = data
 
 
+class ActorControlAggro(ActorControlBase):
+    TYPE = ActorControlType.Aggro
+
+    def __init__(self, data: IpcActorControl):
+        super().__init__(data)
+        self.aggroed = bool(data.param1)
+
+
 class ActorControlEffectOverTime(ActorControlBase):
     TYPE = ActorControlType.EffectOverTime
 

@@ -36,7 +36,7 @@ class IpcRequestMoveInstance(ctypes.LittleEndianStructure, IpcStructure, opcode_
         ("flags", ctypes.c_uint32),
         ("position_vector", PositionVector),
         ("interpolate_position_vector", PositionVector),
-        ("unknown_0x024", ctypes.c_uint8 * 4),
+        ("padding_0x024", ctypes.c_uint8 * 4),
     )
 
     rotation: float
@@ -44,7 +44,7 @@ class IpcRequestMoveInstance(ctypes.LittleEndianStructure, IpcStructure, opcode_
     flags: int
     position_vector: PositionVector
     interpolate_position_vector: PositionVector
-    unknown_0x024: bytearray
+    padding_0x024: bytearray
 
 
 class IpcRequestAction(ctypes.LittleEndianStructure, IpcStructure, opcode_field="RequestAction"):
@@ -150,14 +150,16 @@ class IpcRequestChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="R
     _fields_ = (
         ("padding_0x000", ctypes.c_uint8 * 4),
         ("source_id", ctypes.c_uint32),
-        ("unknown_0x008", ctypes.c_uint8 * 16),
+        ("position_vector", PositionVector),
+        ("rotation", ctypes.c_float),
         ("_chat_type", ctypes.c_uint16),
         ("_message", ctypes.c_char * 1012),
     )
 
     padding_0x000: bytearray
     source_id: int
-    unknown_0x008: bytearray
+    position_vector: PositionVector
+    rotation: float
     _chat_type: int
     _message: bytearray
 
@@ -172,11 +174,11 @@ class IpcRequestChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="R
 
 class IpcRequestChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="RequestChatParty"):
     _fields_ = (
-        ("unknown_0x000", ctypes.c_uint8 * 8),
+        ("party_id", ctypes.c_uint64),
         ("_message", ctypes.c_char * 1024),
     )
 
-    unknown_0x000: bytearray
+    party_id: int
     _message: bytearray
 
     @property

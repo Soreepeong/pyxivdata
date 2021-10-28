@@ -218,13 +218,17 @@ class IpcPlayerParams(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
 
 class IpcChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Chat"):
     _fields_ = (
-        ("unknown_0x000", ctypes.c_uint8 * 14),
+        ("content_id", ctypes.c_uint64),
+        ("character_id", ctypes.c_uint32),
+        ("world_id", ctypes.c_uint16),
         ("_chat_type", ctypes.c_uint16),
         ("_name", ctypes.c_char * 32),
         ("_message", ctypes.c_char * 1012),
     )
 
-    unknown_0x000: bytearray
+    content_id: int
+    character_id: int
+    world_id: int
     _chat_type: int
     _name: bytearray
     _message: bytearray
@@ -244,18 +248,20 @@ class IpcChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Chat"):
 
 class IpcChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ChatParty"):
     _fields_ = (
-        ("unknown_0x000", ctypes.c_uint8 * 8),
+        ("party_id", ctypes.c_uint64),
         ("content_id", ctypes.c_uint64),
         ("character_id", ctypes.c_uint32),
-        ("unknown_0x014", ctypes.c_uint8 * 3),
+        ("world_id", ctypes.c_uint8),
+        ("unknown_0x015", ctypes.c_uint8 * 2),
         ("_name", ctypes.c_char * 32),
         ("_message", ctypes.c_char * 1025),
     )
 
-    unknown_0x000: bytearray
+    party_id: int
     content_id: int
     character_id: int
-    unknown_0x014: bytearray
+    world_id: int
+    unknown_0x015: bytearray
     _name: bytearray
     _message: bytearray
 
@@ -270,18 +276,18 @@ class IpcChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Cha
 
 class IpcChatTell(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ChatTell"):
     _fields_ = (
-        ("character_id", ctypes.c_uint32),
-        ("unknown_0x004", ctypes.c_uint8 * 4),
+        ("content_id", ctypes.c_uint64),
         ("world_id", ctypes.c_uint8),
-        ("unknown_0x009", ctypes.c_uint8 * 2),
+        ("unknown_0x009", ctypes.c_uint8),
+        ("unknown_0x00a", ctypes.c_uint8),
         ("_name", ctypes.c_char * 32),
         ("_message", ctypes.c_char * 1029),
     )
 
-    character_id: int
-    unknown_0x004: bytearray
+    content_id: int
     world_id: int
-    unknown_0x009: bytearray
+    unknown_0x009: int
+    unknown_0x00a: int
     _name: bytearray
     _message: bytearray
 
@@ -341,7 +347,7 @@ class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Par
     _fields_ = (
         ("members", Member * 8),
         ("content_id_1", ctypes.c_uint64),
-        ("content_id_2", ctypes.c_uint64),
+        ("party_id", ctypes.c_uint64),
         ("leader_index", ctypes.c_uint8),
         ("party_size", ctypes.c_uint8),
         ("padding_var_1", ctypes.c_uint8 * 6)
@@ -349,10 +355,42 @@ class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Par
 
     members: typing.Sequence[Member]
     content_id_1: int
-    content_id_2: int
+    party_id: int
     leader_index: int
     party_size: int
     padding_var_1: bytearray
+
+
+class IpcPartyModify(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PartyModify"):
+    _fields_ = (
+        ("leader_content_id", ctypes.c_uint64),
+        ("member_content_id", ctypes.c_uint64),
+        ("unknown_0x010", ctypes.c_uint8),
+        ("unknown_0x011", ctypes.c_uint8),
+        ("type", ctypes.c_uint16),
+        ("party_size", ctypes.c_uint8),
+        ("_leader_name", ctypes.c_char * 32),
+        ("_member_name", ctypes.c_char * 32),
+        ("padding_0x050", ctypes.c_uint8 * 3),
+    )
+
+    leader_content_id: int
+    member_content_id: int
+    unknown_0x010: int
+    unknown_0x011: int
+    type: int
+    party_size: int
+    _leader_name: bytearray
+    _member_name: bytearray
+    padding_0x050: bytearray
+
+    @property
+    def leader_name(self) -> str:
+        return self._leader_name.decode("utf-8")
+
+    @property
+    def member_name(self) -> str:
+        return self._member_name.decode("utf-8")
 
 
 class IpcAllianceList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="AllianceList"):
@@ -360,14 +398,30 @@ class IpcAllianceList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
         _fields_ = (
             ("_name", ctypes.c_char * 32),
             ("character_id", ctypes.c_uint32),
-            ("unknown_0x024", ctypes.c_uint8 * 16),
+            ("hp", ctypes.c_uint32),
+            ("max_hp", ctypes.c_uint32),
+            ("home_world_id", ctypes.c_uint16),
+            ("class_or_job", ctypes.c_uint8),
+            ("level", ctypes.c_uint8),
+            ("unknown_0x030", ctypes.c_uint8),
+            ("unknown_0x031", ctypes.c_uint8),
+            ("unknown_0x032", ctypes.c_uint8),
+            ("unknown_0x033", ctypes.c_uint8),
         )
 
         # TODO: find coordinates
 
         _name: bytearray
         character_id: int
-        unknown_0x024: bytearray
+        hp: int
+        max_hp: int
+        home_world_id: int
+        class_or_job: int
+        level: int
+        unknown_0x030: int
+        unknown_0x031: int
+        unknown_0x032: int
+        unknown_0x033: int
 
         @property
         def name(self) -> str:
@@ -501,11 +555,15 @@ class IpcActorControlTarget(IpcActorControlStub, IpcStructure, opcode_field="Act
 
 class IpcActorDespawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ActorDespawn"):
     _fields_ = (
-        ("spawn_id", ctypes.c_uint32),
+        ("spawn_id", ctypes.c_uint8),
+        ("unknown_0x001", ctypes.c_uint8),
+        ("unknown_0x002", ctypes.c_uint16),
         ("actor_id", ctypes.c_uint32),
     )
 
     spawn_id: int
+    unknown_0x001: int
+    unknown_0x002: int
     actor_id: int
 
 
@@ -574,11 +632,11 @@ class IpcActorMove(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Act
 
     @property
     def y(self):
-        return uint16_to_float(self.x_uint16)
+        return uint16_to_float(self.y_uint16)
 
     @property
     def z(self):
-        return uint16_to_float(self.x_uint16)
+        return uint16_to_float(self.z_uint16)
 
     @property
     def position_vector(self):
@@ -608,32 +666,35 @@ class IpcActorSetPos(ctypes.LittleEndianStructure, IpcStructure, opcode_field="A
 class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ActorSpawn"):
     _fields_ = (
         ("title_id", ctypes.c_uint16),
-        ("unknown_0x002", ctypes.c_uint8 * 2),
+        ("unknown_0x002", ctypes.c_uint16),
         ("current_world_id", ctypes.c_uint16),
         ("home_world_id", ctypes.c_uint16),
 
         ("gm_rank", ctypes.c_uint8),
-        ("unknown_0x011", ctypes.c_uint8 * 2),
+        ("unknown_0x011", ctypes.c_uint8),
+        ("unknown_0x012", ctypes.c_uint8),
         ("online_status", ctypes.c_uint8),
         ("pose", ctypes.c_uint8),
-        ("unknown_0x015", ctypes.c_uint8 * 3),
+        ("unknown_0x015", ctypes.c_uint8),
+        ("unknown_0x016", ctypes.c_uint16),
         ("target_id", ctypes.c_uint64),
 
-        ("unknown_0x020", ctypes.c_uint8 * 8),
+        ("unknown_0x020", ctypes.c_uint64),
         ("main_weapon_model", ctypes.c_uint64),
 
         ("sub_weapon_model", ctypes.c_uint64),
         ("craft_tool_model", ctypes.c_uint64),
 
-        ("unknown_0x040", ctypes.c_uint8 * 8),
+        ("unknown_0x040", ctypes.c_uint32),
+        ("unknown_0x044", ctypes.c_uint32),
         ("bnpc_base", ctypes.c_uint32),
         ("bnpc_name", ctypes.c_uint32),
 
-        ("unknown_0x050", ctypes.c_uint8 * 8),
+        ("unknown_0x050", ctypes.c_uint64),
         ("director_id", ctypes.c_uint32),
         ("owner_id", ctypes.c_uint32),
 
-        ("unknown_0x060", ctypes.c_uint8 * 4),
+        ("some_actor_id", ctypes.c_uint32),
         ("max_hp", ctypes.c_uint32),
         ("hp", ctypes.c_uint32),
         ("display_flags", ctypes.c_uint32),
@@ -641,31 +702,35 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
         ("fate_id", ctypes.c_uint16),
         ("mp", ctypes.c_uint16),
         ("max_mp", ctypes.c_uint16),
-        ("unknown_0x076", ctypes.c_uint8 * 2),
+        ("unknown_0x076", ctypes.c_uint16),
         ("model_chara", ctypes.c_uint16),
         ("rotation_uint16", ctypes.c_uint16),
         ("active_minion", ctypes.c_uint16),
-        ("spawn_index", ctypes.c_uint8),
-        ("state", ctypes.c_uint8),
+        ("unknown_0x07e", ctypes.c_uint8),
+        ("unknown_0x07f", ctypes.c_uint8),
 
+        ("spawn_id", ctypes.c_uint8),
+        ("state", ctypes.c_uint8),
         ("persistent_emote", ctypes.c_uint8),
         ("model_type", ctypes.c_uint8),
         ("model_subtype", ctypes.c_uint8),
         ("voice", ctypes.c_uint8),
-        ("unknown_0x084", ctypes.c_uint8 * 2),
-        ("enemy_type", ctypes.c_uint8),
-        ("unknown_which", ctypes.c_uint8 * 4),  # somewhere in this block
-
+        ("unknown_0x086", ctypes.c_uint16),
+        ("npc_type", ctypes.c_uint8),
         ("level", ctypes.c_uint8),
         ("class_or_job", ctypes.c_uint8),
-        ("unknown_0x089", ctypes.c_uint8 * 3),
+        ("unknown_0x08b", ctypes.c_uint8),
+        ("unknown_0x08c", ctypes.c_uint8),
         ("current_mount", ctypes.c_uint8),
-        ("mount_head", ctypes.c_uint8),
-        ("mount_body", ctypes.c_uint8),
-        ("mount_feet", ctypes.c_uint8),
+        ("chocobo_barding_head", ctypes.c_uint8),
+        ("chocobo_barding_body", ctypes.c_uint8),
 
-        ("mount_color", ctypes.c_uint8),
-        ("scale", ctypes.c_uint8),
+        ("chocobo_barding_feet", ctypes.c_uint8),
+        ("chocobo_color", ctypes.c_uint8),
+        ("unknown_0x092", ctypes.c_uint8),
+        ("duty_specific_level", ctypes.c_uint8),
+        ("unknown_0x094", ctypes.c_uint8),
+        ("unknown_0x095", ctypes.c_uint8),
         ("element_data", ctypes.c_uint8 * 6),
         ("status_effects", StatusEffect * 30),
         ("position_vector", PositionVector),
@@ -673,7 +738,7 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
         ("_name", ctypes.c_char * 32),
         ("look", ctypes.c_uint8 * 26),
         ("_fc_tag", ctypes.c_char * 6),
-        ("unknown_var_1", ctypes.c_uint8 * 4),
+        ("unknown_var_1", ctypes.c_uint32),
     )
 
     title_id: int
@@ -707,22 +772,22 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
     model_chara: int
     rotation_uint16: int
     active_minion: int
-    spawn_index: int
+    spawn_id: int
     state: int
     persistent_emote: int
     model_type: int
     model_subtype: int
     voice: int
     unknown_0x084: bytearray
-    enemy_type: int
+    npc_type: int
     level: int
     class_or_job: int
     unknown_0x089: bytearray
     current_mount: int
-    mount_head: int
-    mount_body: int
-    mount_feet: int
-    mount_color: int
+    chocobo_barding_head: int
+    chocobo_barding_body: int
+    chocobo_barding_feet: int
+    chocobo_color: int
     scale: int
     element_data: int
     status_effects: typing.Sequence[StatusEffect]
@@ -749,32 +814,41 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
 class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ActorSpawnNpc"):
     _fields_ = (
         ("gimmick_id", ctypes.c_uint32),
-        ("unknown_0x004", ctypes.c_uint8 * 2),
+        ("unknown_0x004", ctypes.c_uint16),
         ("gm_rank", ctypes.c_uint8),
-        ("unknown_0x007", ctypes.c_uint8 * 1),
+        ("unknown_0x007", ctypes.c_uint8),
 
         ("aggression_mode", ctypes.c_uint8),
         ("online_status", ctypes.c_uint8),
-        ("unknown_0x010", ctypes.c_uint8 * 1),
+        ("unknown_0x010", ctypes.c_uint8),
         ("pose", ctypes.c_uint8),
-        ("unknown_0x015", ctypes.c_uint8 * 4),
+        ("unknown_0x015", ctypes.c_uint32),  # 0x1400
         ("target_id", ctypes.c_uint64),
 
-        ("unknown_0x020", ctypes.c_uint8 * 8),
+        ("unknown_0x020", ctypes.c_uint64),
         ("main_weapon_model", ctypes.c_uint64),
 
         ("sub_weapon_model", ctypes.c_uint64),
         ("craft_tool_model", ctypes.c_uint64),
 
-        ("unknown_0x040", ctypes.c_uint8 * 8),
+        # 火剣のメリオール(0x4000a0d4)
+        # 法剣のロヴロ(0x4000a0d0)
+        # G.M.(0x40009d66)
+        # T.A.(0x4000a0d4)
+        ("unknown_0x040", ctypes.c_uint32),
+        ("unknown_0x044", ctypes.c_uint32),
         ("bnpc_base", ctypes.c_uint32),
         ("bnpc_name", ctypes.c_uint32),
 
-        ("unknown_0x050", ctypes.c_uint8 * 8),
+        # 火剣のメリオール(0x85e9cc)
+        # ザトゥノル・カンパ(0x84df7b, 0x84df75, 0x84df7c, 0x84df79, 0x84df7d)
+        # ウォータースプライト(0x84df6a)
+        # ザトゥノル・クリフモ(0x84df9b, 0x84df9f, 0x84df9d, 0x84df9e)
+        ("unknown_0x050", ctypes.c_uint64),
         ("director_id", ctypes.c_uint32),
         ("owner_id", ctypes.c_uint32),
 
-        ("unknown_0x060", ctypes.c_uint8 * 4),
+        ("some_actor_id", ctypes.c_uint32),
         ("max_hp", ctypes.c_uint32),
         ("hp", ctypes.c_uint32),
         ("display_flags", ctypes.c_uint32),
@@ -782,32 +856,36 @@ class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field=
         ("fate_id", ctypes.c_uint16),
         ("mp", ctypes.c_uint16),
         ("max_mp", ctypes.c_uint16),
-        ("unknown_0x076", ctypes.c_uint8 * 2),
+        ("unknown_0x076", ctypes.c_uint16),
         ("model_chara", ctypes.c_uint16),
         ("rotation_uint16", ctypes.c_uint16),
         ("active_minion", ctypes.c_uint16),
-        ("spawn_index", ctypes.c_uint8),
-        ("state", ctypes.c_uint8),
+        ("unknown_0x07e", ctypes.c_uint8),
+        ("unknown_0x07f", ctypes.c_uint8),
 
+        ("spawn_id", ctypes.c_uint8),
+        ("state", ctypes.c_uint8),
         ("persistent_emote", ctypes.c_uint8),
         ("model_type", ctypes.c_uint8),
         ("model_subtype", ctypes.c_uint8),
         ("voice", ctypes.c_uint8),
-        ("unknown_0x084", ctypes.c_uint8 * 2),
-        ("enemy_type", ctypes.c_uint8),
-        ("unknown_which", ctypes.c_uint8 * 4),  # somewhere in this block
-
+        ("unknown_0x086", ctypes.c_uint16),
+        ("npc_type", ctypes.c_uint8),
         ("level", ctypes.c_uint8),
         ("class_or_job", ctypes.c_uint8),
-        ("unknown_0x089", ctypes.c_uint8 * 3),
+        ("unknown_0x08b", ctypes.c_uint8),
+        ("unknown_0x08c", ctypes.c_uint8),
         ("current_mount", ctypes.c_uint8),
-        ("mount_head", ctypes.c_uint8),
-        ("mount_body", ctypes.c_uint8),
-        ("mount_feet", ctypes.c_uint8),
+        ("chocobo_barding_head", ctypes.c_uint8),
+        ("chocobo_barding_body", ctypes.c_uint8),
 
-        ("mount_color", ctypes.c_uint8),
-        ("scale", ctypes.c_uint8),
-        ("elementData", ctypes.c_uint8 * 6),
+        ("chocobo_barding_feet", ctypes.c_uint8),
+        ("chocobo_color", ctypes.c_uint8),
+        ("unknown_0x092", ctypes.c_uint8),
+        ("duty_specific_level", ctypes.c_uint8),
+        ("unknown_0x094", ctypes.c_uint8),
+        ("unknown_0x095", ctypes.c_uint8),
+        ("element_data", ctypes.c_uint8 * 6),
         ("status_effects", StatusEffect * 30),
         ("position_vector", PositionVector),
         ("models", ctypes.c_uint32 * 10),
@@ -837,7 +915,7 @@ class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field=
     unknown_0x050: bytearray
     director_id: int
     owner_id: int
-    unknown_0x060: bytearray
+    some_actor_id: bytearray
     max_hp: int
     hp: int
     display_flags: int
@@ -848,24 +926,24 @@ class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field=
     model_chara: int
     rotation_uint16: int
     active_minion: int
-    spawn_index: int
+    spawn_id: int
     state: int
     persistent_emote: int
     model_type: int
     model_subtype: int
     voice: int
     unknown_0x084: bytearray
-    enemy_type: int
+    npc_type: int
     level: int
     class_or_job: int
     unknown_0x089: bytearray
     current_mount: int
-    mount_head: int
-    mount_body: int
-    mount_feet: int
-    mount_color: int
+    chocobo_barding_head: int
+    chocobo_barding_body: int
+    chocobo_barding_feet: int
+    chocobo_color: int
     scale: int
-    elementData: int
+    element_data: int
     status_effects: typing.Sequence[StatusEffect]
     position_vector: PositionVector
     models: typing.Sequence[int]
@@ -1076,6 +1154,28 @@ class IpcInitZone(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Init
     unknown_0x050: bytearray
 
 
+class IpcDirectorUpdate(ctypes.LittleEndianStructure, IpcStructure, opcode_field="DirectorUpdate"):
+    _fields_ = (
+        ("director_id", ctypes.c_uint32),
+        ("sequence", ctypes.c_uint8),
+        ("branch", ctypes.c_uint8),
+        ("data", ctypes.c_uint8 * 10),
+        ("unknown_0x010", ctypes.c_uint16),
+        ("unknown_0x012", ctypes.c_uint16),
+        ("unknown_0x014", ctypes.c_uint16),
+        ("unknown_0x016", ctypes.c_uint16),
+    )
+
+    director_id: int
+    sequence: int
+    branch: int
+    data: bytearray
+    unknown_0x010: int
+    unknown_0x012: int
+    unknown_0x014: int
+    unknown_0x016: int
+
+
 class IpcPlaceWaymark(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PlaceWaymark"):
     _fields_ = (
         ("_waymark_type", ctypes.c_uint8),
@@ -1117,9 +1217,9 @@ class IpcPlaceWaymark(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
 class IpcPlacePresetWaymark(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PlacePresetWaymark"):
     _fields_ = (
         ("waymark_flags", ctypes.c_uint8),
-        ("x_uint32", ctypes.c_int32 * 8),
-        ("y_uint32", ctypes.c_int32 * 8),
-        ("z_uint32", ctypes.c_int32 * 8),
+        ("x_int32", ctypes.c_int32 * 8),
+        ("y_int32", ctypes.c_int32 * 8),
+        ("z_int32", ctypes.c_int32 * 8),
     )
 
     waymark_flags: int
@@ -1152,4 +1252,4 @@ class IpcPlacePresetWaymark(ctypes.LittleEndianStructure, IpcStructure, opcode_f
         }
 
     def is_visible(self, waymark_type: WaymarkType) -> bool:
-        return bool(self.waymark_flags & (1 << (waymark_type - 1)))
+        return bool(self.waymark_flags & (1 << waymark_type))

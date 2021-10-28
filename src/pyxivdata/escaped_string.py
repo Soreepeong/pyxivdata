@@ -34,34 +34,35 @@ class SqEscapeType(enum.IntEnum):
     PresetColorChange = 0x48  # \xf2\x01\xf8 ... \x01
     PresetBorderChange = 0x49  # \xf2\x01\xf9 ... \x01
 
-    Unknown_06 = 0x06
-    Unknown_0a = 0x0a  # Probably source player
-    Unknown_0f = 0x0f
-    Unknown_14 = 0x14
-    Unknown_16 = 0x16
-    Unknown_17 = 0x17
-    Unknown_19 = 0x19
-    Unknown_26 = 0x26
-    Unknown_2d = 0x2d
+    X06 = 0x06
+    X0a = 0x0a  # Probably source player
+    X0f = 0x0f
+    X14 = 0x14
+    X16 = 0x16
+    X17 = 0x17
+    X19 = 0x19
+    X26 = 0x26
+    X2d = 0x2d
 
-    # The Orbonne Monastery(33f20b30):
+    # The Orbonne Monastery (33f20b30):
     #     Completion (category=0x33=51)
     #         Lookup column(2) specified (PlaceName[20-37,39-59,...,2864-2864,...])
     #     PlaceName (row_id=0xb30=2864)
-    # Let's do it!(02f0e3)
+    # Let's do it! (02f0e3)
     #     Completion (category=2, row_id=0xE3=227)
-    # Let's rest for a while.(08f2033a)
+    # Let's rest for a while. (08f2033a)
     #     Completion (category=8, row_id=0x033a=826)
-    # <se.##>(c9 06 ##)
-    Unknown_2e = 0x2e
+    # <se.##> (c9 06 ##)
+    # Map link at Zadnor (8.4, 24.2) (c9 04 f2 03 cf f2 02 99 fe ff f6 10 bb f6 02 24 4d fe ff ff 8a d0)
+    X2e = 0x2e
 
-    Unknown_2f = 0x2f
-    Unknown_32 = 0x32
-    Unknown_33 = 0x33
-    Unknown_50 = 0x50
-    Unknown_51 = 0x51
-    Unknown_60 = 0x60
-    Unknown_61 = 0x61
+    X2f = 0x2f
+    X32 = 0x32
+    X33 = 0x33
+    X50 = 0x50
+    X51 = 0x51
+    X60 = 0x60
+    X61 = 0x61
 
     def __str__(self):
         return f"{self.name}({self.value})"
@@ -210,7 +211,7 @@ class SqEscapedString:
             if isinstance(escape_type, SqEscapeType):
                 escape_type_name = escape_type.name
             else:
-                escape_type_name = f"Unknown_{escape_type:02x}"
+                escape_type_name = f"X{escape_type:02x}"
                 print(escape_type_name)
 
             if not escaped:
