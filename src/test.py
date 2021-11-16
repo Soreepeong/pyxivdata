@@ -7,6 +7,7 @@ from pyxivdata.resource.font.reader import FontReader
 
 def __main__():
     with GameResourceReader() as game:
+        print(game.get_status(2625))
         print(game.excels[209][4][1])
         print(game.get_action_name(4))
         print(game.get_status_effect_name(4))

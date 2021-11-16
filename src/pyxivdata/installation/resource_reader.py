@@ -1,4 +1,5 @@
 import functools
+import importlib
 import os
 import pathlib
 import typing
@@ -6,7 +7,9 @@ import typing
 from pyxivdata.common import SqPathSpec, GameLanguage, GameInstallationRegion
 from pyxivdata.escaped_string import SqEscapedString
 from pyxivdata.installation.game_locator import GameInstallation, GameLocator
-from pyxivdata.resource.excel.reader import ExcelReader
+from pyxivdata.resource.excel.rowdef import KNOWN_ROW_TYPES
+from pyxivdata.resource.excel.rowdef.status import StatusRow
+from pyxivdata.resource.excel.reader import ExcelReader, ExdRow
 from pyxivdata.sqpack.reader import SqpackReader
 
 SQPACK_CATEGORY_MAP = {
@@ -133,8 +136,10 @@ class GameResourceReader:
                     item = id_to_name[item]
                 elif not isinstance(item, str):
                     raise TypeError
+                item = item.lower()
                 if item not in outer_self._excel_readers:
-                    outer_self._excel_readers[item] = ExcelReader(outer_self, item, outer_self._default_languages)
+                    outer_self._excel_readers[item] = ExcelReader(outer_self, item, outer_self._default_languages,
+                                                                  KNOWN_ROW_TYPES.get(item, ExdRow))
                 return outer_self._excel_readers[item]
 
             @property
@@ -157,8 +162,9 @@ class GameResourceReader:
 
     @functools.cache
     def get_excel_row(
-            self, excel_name: str, row_id: int, language: typing.Optional[GameLanguage] = None
-    ) -> typing.Optional[typing.List[typing.Union[typing.Optional[SqEscapedString], bool, int, float]]]:
+            self, excel_name: str, row_id: int, language: typing.Optional[GameLanguage] = None,
+            row_type: typing.Type[ExdRow] = None
+    ) -> typing.Optional[ExdRow]:
         reader = self.excels[excel_name]
         if GameLanguage.Undefined in reader.languages:
             language = GameLanguage.Undefined
@@ -175,6 +181,9 @@ class GameResourceReader:
         except KeyError:
             pass
         return None
+
+    def get_status(self, status_effect_id: int, language: typing.Optional[GameLanguage] = None) -> StatusRow:
+        return self.get_excel_row("Status", status_effect_id, language, StatusRow)
 
     def get_excel_string(self, excel_name: str, row_id: int, column_index: int,
                          language: typing.Optional[GameLanguage] = None,
