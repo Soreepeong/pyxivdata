@@ -196,6 +196,8 @@ class SqPathSpec:
             self = super().__new__(cls)
             if full_path is not None:
                 self._full_path = os.path.normpath(full_path).replace("\\", "/")
+                if full_path[-1] in ('/', '\\'):
+                    self._full_path += "/"
             else:
                 self._path_hash = path_hash
                 self._name_hash = name_hash
@@ -222,23 +224,26 @@ class SqPathSpec:
 
     @property
     def name_hash(self) -> int:
-        self._resolve_hashes_from_full_path()
         if self._name_hash is None:
-            raise KeyError("name hash unknown")
+            self._resolve_hashes_from_full_path()
+            if self._name_hash is None:
+                raise KeyError("name hash unknown")
         return self._name_hash
 
     @property
     def path_hash(self) -> int:
-        self._resolve_hashes_from_full_path()
         if self._path_hash is None:
-            raise KeyError("path hash unknown")
+            self._resolve_hashes_from_full_path()
+            if self._path_hash is None:
+                raise KeyError("path hash unknown")
         return self._path_hash
 
     @property
     def full_path_hash(self) -> int:
-        self._resolve_hashes_from_full_path()
         if self._full_path_hash is None:
-            raise KeyError("full path hash unknown")
+            self._resolve_hashes_from_full_path()
+            if self._full_path_hash is None:
+                raise KeyError("full path hash unknown")
         return self._full_path_hash
 
     @property

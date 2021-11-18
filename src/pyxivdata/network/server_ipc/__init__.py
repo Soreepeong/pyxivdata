@@ -1,7 +1,7 @@
 import ctypes
 import typing
 
-from pyxivdata.escaped_string import SqEscapedString
+from pyxivdata.escaped_string import SeString
 from pyxivdata.network.common import PositionVector, IpcStructure, uint8_to_float_rot, uint16_to_float, \
     uint16_to_float_rot
 from pyxivdata.network.enums import EffectType, EffectDisplayType, ActorControlType, WaymarkType, ActionType, ChatType
@@ -242,8 +242,8 @@ class IpcChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Chat"):
         return self._name.decode("utf-8")
 
     @property
-    def message(self) -> SqEscapedString:
-        return SqEscapedString(self._message.rstrip(b'\0'))
+    def message(self) -> SeString:
+        return SeString(self._message.rstrip(b'\0'))
 
 
 class IpcChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ChatParty"):
@@ -270,8 +270,8 @@ class IpcChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Cha
         return self._name.decode("utf-8")
 
     @property
-    def message(self) -> SqEscapedString:
-        return SqEscapedString(self._message.rstrip(b'\0'))
+    def message(self) -> SeString:
+        return SeString(self._message.rstrip(b'\0'))
 
 
 class IpcChatTell(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ChatTell"):
@@ -296,8 +296,8 @@ class IpcChatTell(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Chat
         return self._name.decode("utf-8")
 
     @property
-    def message(self) -> SqEscapedString:
-        return SqEscapedString(self._message.rstrip(b'\0'))
+    def message(self) -> SeString:
+        return SeString(self._message.rstrip(b'\0'))
 
 
 class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PartyList"):

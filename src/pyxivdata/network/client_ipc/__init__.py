@@ -1,6 +1,6 @@
 import ctypes
 
-from pyxivdata.escaped_string import SqEscapedString
+from pyxivdata.escaped_string import SeString
 from pyxivdata.network.common import IpcStructure, PositionVector, uint8_to_float_rot
 from pyxivdata.network.enums import ActionType, ChatType
 
@@ -142,8 +142,8 @@ class IpcRequestTell(ctypes.LittleEndianStructure, IpcStructure, opcode_field="R
         return self._target_name.decode("utf-8")
 
     @property
-    def message(self) -> SqEscapedString:
-        return SqEscapedString(self._message.rstrip(b'\0'))
+    def message(self) -> SeString:
+        return SeString(self._message.rstrip(b'\0'))
 
 
 class IpcRequestChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="RequestChat"):
@@ -168,8 +168,8 @@ class IpcRequestChat(ctypes.LittleEndianStructure, IpcStructure, opcode_field="R
         return ChatType(self._chat_type)
 
     @property
-    def message(self) -> SqEscapedString:
-        return SqEscapedString(self._message.rstrip(b'\0'))
+    def message(self) -> SeString:
+        return SeString(self._message.rstrip(b'\0'))
 
 
 class IpcRequestChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_field="RequestChatParty"):
@@ -182,5 +182,5 @@ class IpcRequestChatParty(ctypes.LittleEndianStructure, IpcStructure, opcode_fie
     _message: bytearray
 
     @property
-    def message(self) -> SqEscapedString:
-        return SqEscapedString(self._message.rstrip(b'\0'))
+    def message(self) -> SeString:
+        return SeString(self._message.rstrip(b'\0'))

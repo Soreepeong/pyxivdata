@@ -72,11 +72,11 @@ class SqIndexType(enum.IntEnum):
 class SqIndexHeader(ctypes.LittleEndianStructure):
     _fields_ = (
         ("header_size", ctypes.c_uint32),
-        ("file_segment", SqIndexSegmentDescriptor),
+        ("hash_locator_segment", SqIndexSegmentDescriptor),
         ("padding_0x04c", ctypes.c_uint8 * 4),
-        ("data_files_segment", SqIndexSegmentDescriptor),
+        ("text_locator_segment", SqIndexSegmentDescriptor),
         ("unknown_segment_3", SqIndexSegmentDescriptor),
-        ("folder_segment", SqIndexSegmentDescriptor),
+        ("path_hash_locator_segment", SqIndexSegmentDescriptor),
         ("padding_0x128", ctypes.c_uint8 * 4),
         ("_index_type", ctypes.c_uint32),
         ("padding_0x130", ctypes.c_uint8 * (0x3c0 - 0x130)),
@@ -85,11 +85,11 @@ class SqIndexHeader(ctypes.LittleEndianStructure):
     )
 
     header_size: int
-    file_segment: SqIndexSegmentDescriptor
+    hash_locator_segment: SqIndexSegmentDescriptor
     padding_0x04c: bytearray
-    data_files_segment: SqIndexSegmentDescriptor
+    text_locator_segment: SqIndexSegmentDescriptor
     unknown_segment_3: SqIndexSegmentDescriptor
-    folder_segment: SqIndexSegmentDescriptor
+    path_hash_locator_segment: SqIndexSegmentDescriptor
     padding_0x128: bytearray
     _index_type: int
     padding_0x130: bytearray
@@ -106,6 +106,14 @@ class SqIndexHeader(ctypes.LittleEndianStructure):
 
 
 class SqIndexDataLocator(ctypes.c_uint32):
+    @property
+    def synonym(self) -> bool:
+        return bool(self.value & 0x1)
+
+    @synonym.setter
+    def synonym(self, value: bool):
+        self.value = (self.value & ~1) | (1 if value else 0)
+
     @property
     def index(self) -> int:
         return (self.value & 0xF) >> 1
@@ -130,7 +138,7 @@ class SqIndexDataLocator(ctypes.c_uint32):
         self.value = (self.value & 0xF) | value
 
 
-class SqIndexFileSegmentEntry(ctypes.LittleEndianStructure):
+class SqIndexPairHashLocator(ctypes.LittleEndianStructure):
     _fields_ = (
         ("name_hash", ctypes.c_uint32),
         ("path_hash", ctypes.c_uint32),
@@ -151,34 +159,34 @@ class SqIndexFileSegmentEntry(ctypes.LittleEndianStructure):
     def path_spec(self) -> SqPathSpec:
         return SqPathSpec(path_hash=self.path_hash, name_hash=self.name_hash)
 
-    def __lt__(self, other: 'SqIndexFileSegmentEntry'):
+    def __lt__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash < other.path_hash
         return self.path_hash < other.path_hash
 
-    def __gt__(self, other: 'SqIndexFileSegmentEntry'):
+    def __gt__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash > other.path_hash
         return self.path_hash > other.path_hash
 
-    def __le__(self, other: 'SqIndexFileSegmentEntry'):
+    def __le__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash <= other.path_hash
         return self.path_hash <= other.path_hash
 
-    def __ge__(self, other: 'SqIndexFileSegmentEntry'):
+    def __ge__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash >= other.path_hash
         return self.path_hash >= other.path_hash
 
-    def __eq__(self, other: 'SqIndexFileSegmentEntry'):
+    def __eq__(self, other: 'SqIndexPairHashLocator'):
         return self.path_hash == other.path_hash and self.name_hash == other.name_hash
 
-    def __ne__(self, other: 'SqIndexFileSegmentEntry'):
+    def __ne__(self, other: 'SqIndexPairHashLocator'):
         return self.path_hash != other.path_hash or self.name_hash != other.name_hash
 
 
-class SqIndex2FileSegmentEntry(ctypes.LittleEndianStructure):
+class SqIndexFullHashLocator(ctypes.LittleEndianStructure):
     _fields_ = (
         ("full_path_hash", ctypes.c_uint32),
         ("locator", SqIndexDataLocator),
@@ -193,45 +201,119 @@ class SqIndex2FileSegmentEntry(ctypes.LittleEndianStructure):
     def path_spec(self) -> SqPathSpec:
         return SqPathSpec(path_hash=self.path_hash, name_hash=self.name_hash)
 
-    def __lt__(self, other: 'SqIndexFileSegmentEntry'):
+    def __lt__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash < other.path_hash
         return self.path_hash < other.path_hash
 
-    def __gt__(self, other: 'SqIndexFileSegmentEntry'):
+    def __gt__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash > other.path_hash
         return self.path_hash > other.path_hash
 
-    def __le__(self, other: 'SqIndexFileSegmentEntry'):
+    def __le__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash <= other.path_hash
         return self.path_hash <= other.path_hash
 
-    def __ge__(self, other: 'SqIndexFileSegmentEntry'):
+    def __ge__(self, other: 'SqIndexPairHashLocator'):
         if self.path_hash == other.path_hash:
             return self.name_hash >= other.path_hash
         return self.path_hash >= other.path_hash
 
-    def __eq__(self, other: 'SqIndexFileSegmentEntry'):
+    def __eq__(self, other: 'SqIndexPairHashLocator'):
         return self.path_hash == other.path_hash and self.name_hash == other.name_hash
 
-    def __ne__(self, other: 'SqIndexFileSegmentEntry'):
+    def __ne__(self, other: 'SqIndexPairHashLocator'):
         return self.path_hash != other.path_hash or self.name_hash != other.name_hash
 
 
-class SqIndexFolderSegmentEntry(ctypes.LittleEndianStructure):
+class SqIndexPathHashLocator(ctypes.LittleEndianStructure):
     _fields_ = (
         ("path_hash", ctypes.c_uint32),
-        ("file_segment_offset", ctypes.c_uint32),
-        ("file_segment_size", ctypes.c_uint32),
+        ("pair_hash_locator_offset", ctypes.c_uint32),
+        ("pair_hash_locator_size", ctypes.c_uint32),
         ("padding_0x00c", ctypes.c_uint8 * 4),
     )
 
     path_hash: int
-    file_segment_offset: int
-    file_segment_size: int
+    pair_hash_locator_offset: int
+    pair_hash_locator_size: int
     padding_0x00c: bytearray
+
+    def __lt__(self, other: 'SqIndexPairHashLocator'):
+        return self.path_hash < other.path_hash
+
+    def __gt__(self, other: 'SqIndexPairHashLocator'):
+        return self.path_hash > other.path_hash
+
+    def __le__(self, other: 'SqIndexPairHashLocator'):
+        return self.path_hash <= other.path_hash
+
+    def __ge__(self, other: 'SqIndexPairHashLocator'):
+        return self.path_hash >= other.path_hash
+
+    def __eq__(self, other: 'SqIndexPairHashLocator'):
+        return self.path_hash == other.path_hash
+
+    def __ne__(self, other: 'SqIndexPairHashLocator'):
+        return self.path_hash != other.path_hash
+
+
+class SqIndexPairHashWithTextLocator(ctypes.LittleEndianStructure):
+    _fields_ = (
+        ("name_hash", ctypes.c_uint32),
+        ("path_hash", ctypes.c_uint32),
+        ("locator", SqIndexDataLocator),
+        ("conflict_index", ctypes.c_uint32),
+        ("_full_path", ctypes.c_char * 0xf0),
+    )
+
+    SENTINEL = 0xFFFFFFFF
+
+    name_hash: int
+    path_hash: int
+    locator: SqIndexDataLocator
+    conflict_index: int
+    _full_path: bytearray
+
+    @property
+    def full_path(self):
+        return self._full_path.decode("utf-8")
+
+    @full_path.setter
+    def full_path(self, value: str):
+        self._full_path = bytearray(value.encode("utf-8"))
+
+    @property
+    def path_spec(self):
+        return SqPathSpec(self.full_path)
+
+
+class SqIndexFullHashWithTextLocator(ctypes.LittleEndianStructure):
+    _fields_ = (
+        ("full_path_hash", ctypes.c_uint32),
+        ("unused_hash", ctypes.c_uint32),
+        ("locator", SqIndexDataLocator),
+        ("conflict_index", ctypes.c_uint32),
+        ("_full_path", ctypes.c_char * 0xf0),
+    )
+
+    SENTINEL = 0xFFFFFFFF
+
+    full_path_hash: int
+    unused_hash: int
+    locator: SqIndexDataLocator
+    conflict_index: int
+    _full_path: bytearray
+
+    @property
+    def full_path(self):
+        return self._full_path.decode("utf-8")
+
+    @full_path.setter
+    def full_path(self, value: str):
+        self._full_path = bytearray(value.encode("utf-8"))
 
 
 class SqDataHeader(ctypes.LittleEndianStructure):

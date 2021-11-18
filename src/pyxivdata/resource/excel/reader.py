@@ -5,7 +5,7 @@ import typing
 from bisect import bisect_left
 
 from pyxivdata.common import GameLanguage
-from pyxivdata.escaped_string import SqEscapedString
+from pyxivdata.escaped_string import SeString
 from pyxivdata.resource.excel.structures import ExhHeader, ExhColumnDefinition, ExhPageDefinition, ExdHeader, \
     ExdRowLocator, ExdRowHeader, ExhColumnDataType, ExhDepth
 
@@ -13,7 +13,7 @@ if typing.TYPE_CHECKING:
     from pyxivdata.sqpack.reader import SqpackReader
     from pyxivdata.installation.resource_reader import GameResourceReader
 
-PossibleColumnType = typing.Union[SqEscapedString, bool, int, float]
+PossibleColumnType = typing.Union[SeString, bool, int, float]
 
 
 def transform_column(col: ExhColumnDefinition,
@@ -22,7 +22,7 @@ def transform_column(col: ExhColumnDefinition,
                      ) -> PossibleColumnType:
     if col.type == ExhColumnDataType.String:
         string_offset = int.from_bytes(fixed_data[col.offset:col.offset + 4], "big", signed=False)
-        return SqEscapedString(variable_data[string_offset:variable_data.index(0, string_offset)])
+        return SeString(variable_data[string_offset:variable_data.index(0, string_offset)])
     elif col.type == ExhColumnDataType.Bool:
         return bool(fixed_data[col.offset])
     elif col.type == ExhColumnDataType.Int8:
@@ -49,7 +49,13 @@ def transform_column(col: ExhColumnDefinition,
 
 
 class ExdRow:
-    _mapping: typing.Optional[typing.Dict[str, type]] = None
+    _name_to_type_map: typing.ClassVar[typing.Dict[str, typing.Type['ExdRow']]] = {}
+    _mapping: typing.ClassVar[typing.Optional[typing.Dict[str, type]]] = None
+    _index_to_name_mapping: typing.ClassVar[typing.Optional[typing.Dict[int, str]]] = None
+
+    @classmethod
+    def type_from_name(cls, name: str):
+        return cls._name_to_type_map.get(name.lower(), ExdRow)
 
     def __init__(self, row_id: int, sub_row_id: typing.Optional[int],
                  columns: typing.Sequence[ExhColumnDefinition],
@@ -63,12 +69,15 @@ class ExdRow:
 
     def __init_subclass__(cls, **kwargs):
         cls._mapping = {}
+        cls._index_to_name_mapping = {}
+        cls._name_to_type_map[cls.__name__.lower()[:-3]] = cls
         for k, t in typing.get_type_hints(cls).items():
             k: str
             t: type
             if k[0] == '_' or k[0].isupper():
                 continue
             cls._mapping[k] = t
+            cls._index_to_name_mapping[getattr(cls, k)] = k
 
     @functools.cache
     def __getitem__(self, item: typing.Union[int, slice]):
@@ -88,6 +97,23 @@ class ExdRow:
     def sub_row_id(self):
         return self._sub_row_id
 
+    @property
+    def columns(self):
+        return self._columns
+
+    @property
+    def values(self):
+        return [self[i] for i in range(len(self._columns))]
+
+    def __dir__(self):
+        return [
+            "row_id",
+            "sub_row_id",
+            "columns",
+            "values",
+            *self._index_to_name_mapping.values(),
+        ]
+
     def __getattribute__(self, item: str):
         try:
             col_type = super().__getattribute__("_mapping")[item]
@@ -100,6 +126,14 @@ class ExdRow:
     def __len__(self):
         return len(self._columns)
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.row_id}: {self[0]})"
+
+
+if True:
+    # noinspection PyUnresolvedReferences
+    from . import rowdef
+
 
 class AbstractExdReader(abc.ABC):
     def __init__(self, data: bytearray, reader: 'ExcelReader', supported_depth: ExhDepth,
@@ -110,7 +144,7 @@ class AbstractExdReader(abc.ABC):
         self._reader = reader
         self._data = data
         self._row_type = row_type
-        
+
         self._header = ExdHeader.from_buffer(data, 0)
         self._locators = (ExdRowLocator * (self._header.index_size // ctypes.sizeof(ExdRowLocator))
                           ).from_buffer(data, ctypes.sizeof(self._header))
@@ -191,13 +225,12 @@ class ExcelReader:
     _default_languages: typing.List[GameLanguage] = [GameLanguage.Undefined]
 
     def __init__(self, reader: typing.Union['SqpackReader', 'GameResourceReader'], name: str,
-                 default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None,
-                 row_type: typing.Type[ExdRow] = ExdRow):
+                 default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None):
         self._reader = reader
         self._name = name
-        self._row_type = row_type
+        self._row_type = ExdRow.type_from_name(name)
 
-        data = reader[f"exd/{name}.exh"]
+        data = reader[f"exd/{name}.exh"].data
         self._header = ExhHeader.from_buffer(data, 0)
 
         offset = ctypes.sizeof(self._header)
@@ -231,9 +264,9 @@ class ExcelReader:
         if exd_key not in self._exd:
             path = f"exd/{self._name}_{page.start_id}{ExcelReader.LANG_SUFFIX[language]}.exd"
             if self._header.depth == ExhDepth.Level2:
-                self._exd[exd_key] = ExdReaderForDepth2(self._reader[path], self, self._row_type)
+                self._exd[exd_key] = ExdReaderForDepth2(self._reader[path].data, self, self._row_type)
             elif self._header.depth == ExhDepth.Level3:
-                self._exd[exd_key] = ExdReaderForDepth3(self._reader[path], self, self._row_type)
+                self._exd[exd_key] = ExdReaderForDepth3(self._reader[path].data, self, self._row_type)
         return self._exd[exd_key]
 
     @property

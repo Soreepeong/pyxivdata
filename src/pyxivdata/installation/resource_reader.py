@@ -1,15 +1,13 @@
 import functools
-import importlib
 import os
 import pathlib
 import typing
 
 from pyxivdata.common import SqPathSpec, GameLanguage, GameInstallationRegion
-from pyxivdata.escaped_string import SqEscapedString
+from pyxivdata.escaped_string import SeString
 from pyxivdata.installation.game_locator import GameInstallation, GameLocator
-from pyxivdata.resource.excel.rowdef import KNOWN_ROW_TYPES
-from pyxivdata.resource.excel.rowdef.status import StatusRow
 from pyxivdata.resource.excel.reader import ExcelReader, ExdRow
+from pyxivdata.resource.excel.rowdef import StatusRow
 from pyxivdata.sqpack.reader import SqpackReader
 
 SQPACK_CATEGORY_MAP = {
@@ -124,7 +122,7 @@ class GameResourceReader:
 
     @functools.cached_property
     def excels(self):
-        name_to_id = dict(x.split(",", 1) for x in self["exd/root.exl"].decode("utf-8").splitlines()[1:])
+        name_to_id = dict(x.split(",", 1) for x in self["exd/root.exl"].data.decode("utf-8").splitlines()[1:])
         name_to_id = {x: int(y) for x, y in name_to_id.items()}
         id_to_name = {y: x for x, y in name_to_id.items() if y != -1}
 
@@ -138,8 +136,7 @@ class GameResourceReader:
                     raise TypeError
                 item = item.lower()
                 if item not in outer_self._excel_readers:
-                    outer_self._excel_readers[item] = ExcelReader(outer_self, item, outer_self._default_languages,
-                                                                  KNOWN_ROW_TYPES.get(item, ExdRow))
+                    outer_self._excel_readers[item] = ExcelReader(outer_self, item, outer_self._default_languages)
                 return outer_self._excel_readers[item]
 
             @property
@@ -162,8 +159,7 @@ class GameResourceReader:
 
     @functools.cache
     def get_excel_row(
-            self, excel_name: str, row_id: int, language: typing.Optional[GameLanguage] = None,
-            row_type: typing.Type[ExdRow] = None
+            self, excel_name: str, row_id: int, language: typing.Optional[GameLanguage] = None
     ) -> typing.Optional[ExdRow]:
         reader = self.excels[excel_name]
         if GameLanguage.Undefined in reader.languages:
@@ -183,59 +179,59 @@ class GameResourceReader:
         return None
 
     def get_status(self, status_effect_id: int, language: typing.Optional[GameLanguage] = None) -> StatusRow:
-        return self.get_excel_row("Status", status_effect_id, language, StatusRow)
+        return self.get_excel_row("Status", status_effect_id, language)
 
     def get_excel_string(self, excel_name: str, row_id: int, column_index: int,
                          language: typing.Optional[GameLanguage] = None,
                          fallback_format: typing.Optional[str] = None,
-                         plural_column_index: typing.Optional[int] = None) -> SqEscapedString:
+                         plural_column_index: typing.Optional[int] = None) -> SeString:
         res = self.get_excel_row(excel_name, row_id, language)
         if res is None:
             if fallback_format is None:
                 raise
-            return SqEscapedString(parsed=fallback_format.format(row_id), components=[])
-        if plural_column_index is None or res[plural_column_index].escaped == b"":
+            return SeString(fallback_format.format(row_id))
+        if plural_column_index is None or bytes(res[plural_column_index]) == b"":
             return res[column_index]
         return res[plural_column_index]
 
     def get_action_name(self, action_id: int, language: typing.Optional[GameLanguage] = None,
-                        fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                        fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("Action", action_id, 0, language, fallback_format)
 
     def get_action_description(self, action_id: int, language: typing.Optional[GameLanguage] = None,
-                               fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                               fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("ActionTransient", action_id, 0, language, fallback_format)
 
     def get_status_effect_name(self, status_effect_id: int, language: typing.Optional[GameLanguage] = None,
-                               fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                               fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("Status", status_effect_id, 0, language, fallback_format)
 
     def get_status_effect_description(self, status_effect_id: int, language: typing.Optional[GameLanguage] = None,
-                                      fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                                      fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("Status", status_effect_id, 1, language, fallback_format)
 
     def get_bnpc_name(self, index: int, language: typing.Optional[GameLanguage] = None, plural: bool = False,
-                      fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                      fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("BNpcName", index, 0, language, fallback_format, 2 if plural else None)
 
     def get_eobj_name(self, index: int, language: typing.Optional[GameLanguage] = None, plural: bool = False,
-                      fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                      fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("EObjName", index, 0, language, fallback_format, 2 if plural else None)
 
     def get_companion_name(self, index: int, language: typing.Optional[GameLanguage] = None, plural: bool = False,
-                           fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+                           fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("Companion", index, 0, language, fallback_format, 2 if plural else None)
 
-    def get_world_name(self, index: int, fallback_format: typing.Optional[str] = None) -> SqEscapedString:
+    def get_world_name(self, index: int, fallback_format: typing.Optional[str] = None) -> SeString:
         return self.get_excel_string("World", index, 0, GameLanguage.Undefined, fallback_format)
 
     def get_territory_name(self, territory_id: int, language: typing.Optional[GameLanguage] = None,
                            title_form: bool = True, fallback_format: typing.Optional[str] = None
-                           ) -> SqEscapedString:
+                           ) -> SeString:
         territory = self.get_excel_row("TerritoryType", territory_id, GameLanguage.Undefined)
         if territory is None:
             if fallback_format is None:
                 raise KeyError
-            return SqEscapedString(parsed=fallback_format.format(territory_id), components=())
+            return SeString(parsed=fallback_format.format(territory_id), components=())
         placename_index = territory[5]
         return self.get_excel_string("PlaceName", placename_index, 0, language, fallback_format, 0 if title_form else 2)
