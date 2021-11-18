@@ -120,7 +120,7 @@ class IpcEffectResult(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
         ("max_hp", ctypes.c_uint32),
         ("mp", ctypes.c_uint16),
         ("unknown_0x012", ctypes.c_uint8 * 1),
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("shield_percentage", ctypes.c_uint8),
         ("entry_count", ctypes.c_uint8),
         ("unknown_0x016", ctypes.c_uint8 * 2),
@@ -132,7 +132,7 @@ class IpcEffectResult(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
     max_hp: int
     mp: int
     unknown_0x012: bytearray
-    class_or_job: int
+    class_job: int
     shield_percentage: int
     entry_count: int
     unknown_0x016: bytearray
@@ -141,11 +141,11 @@ class IpcEffectResult(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
 
 class IpcPlayerGauge(ctypes.LittleEndianStructure, IpcStructure, opcode_field="PlayerGauge"):
     _fields_ = (
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("data", ctypes.c_uint8 * 15),
     )
 
-    class_or_job: int
+    class_job: int
     data: bytearray
 
 
@@ -315,7 +315,7 @@ class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Par
             ("unknown_0x040", ctypes.c_uint8 * 2),
             ("zone_id", ctypes.c_uint16),
             ("gpose_selectable", ctypes.c_bool),
-            ("class_or_job", ctypes.c_uint8),
+            ("class_job", ctypes.c_uint8),
             ("unknown_0x046", ctypes.c_uint8 * 1),
             ("level", ctypes.c_uint8),
             ("unknown_0x048", ctypes.c_uint8 * 368),
@@ -335,7 +335,7 @@ class IpcPartyList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Par
         unknown_0x040: bytearray
         zone_id: int
         gpose_selectable: bool
-        class_or_job: int
+        class_job: int
         unknown_0x046: bytearray
         level: int
         unknown_0x048: bytearray
@@ -401,7 +401,7 @@ class IpcAllianceList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
             ("hp", ctypes.c_uint32),
             ("max_hp", ctypes.c_uint32),
             ("home_world_id", ctypes.c_uint16),
-            ("class_or_job", ctypes.c_uint8),
+            ("class_job", ctypes.c_uint8),
             ("level", ctypes.c_uint8),
             ("unknown_0x030", ctypes.c_uint8),
             ("unknown_0x031", ctypes.c_uint8),
@@ -416,7 +416,7 @@ class IpcAllianceList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="
         hp: int
         max_hp: int
         home_world_id: int
-        class_or_job: int
+        class_job: int
         level: int
         unknown_0x030: int
         unknown_0x031: int
@@ -572,7 +572,7 @@ class IpcActorModelEquip(ctypes.LittleEndianStructure, IpcStructure, opcode_fiel
         ("main_weapon", ctypes.c_uint64),
         ("sub_weapon", ctypes.c_uint64),
         ("unknown_0x010", ctypes.c_uint8),
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("level", ctypes.c_uint8),
         ("unknown_0x013", ctypes.c_uint8),
         ("models", ctypes.c_uint32 * 10),
@@ -582,7 +582,7 @@ class IpcActorModelEquip(ctypes.LittleEndianStructure, IpcStructure, opcode_fiel
     main_weapon: int
     sub_weapon: int
     unknown_0x010: bytearray
-    class_or_job: int
+    class_job: int
     level: int
     unknown_0x013: bytearray
     models: typing.Sequence[int]
@@ -718,7 +718,7 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
         ("unknown_0x086", ctypes.c_uint16),
         ("npc_type", ctypes.c_uint8),
         ("level", ctypes.c_uint8),
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("unknown_0x08b", ctypes.c_uint8),
         ("unknown_0x08c", ctypes.c_uint8),
         ("current_mount", ctypes.c_uint8),
@@ -781,7 +781,7 @@ class IpcActorSpawn(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
     unknown_0x084: bytearray
     npc_type: int
     level: int
-    class_or_job: int
+    class_job: int
     unknown_0x089: bytearray
     current_mount: int
     chocobo_barding_head: int
@@ -872,7 +872,7 @@ class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field=
         ("unknown_0x086", ctypes.c_uint16),
         ("npc_type", ctypes.c_uint8),
         ("level", ctypes.c_uint8),
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("unknown_0x08b", ctypes.c_uint8),
         ("unknown_0x08c", ctypes.c_uint8),
         ("current_mount", ctypes.c_uint8),
@@ -935,7 +935,7 @@ class IpcActorSpawnNpc(ctypes.LittleEndianStructure, IpcStructure, opcode_field=
     unknown_0x084: bytearray
     npc_type: int
     level: int
-    class_or_job: int
+    class_job: int
     unknown_0x089: bytearray
     current_mount: int
     chocobo_barding_head: int
@@ -983,7 +983,7 @@ class IpcActorStats(ctypes.LittleEndianStructure, IpcStructure, opcode_field="Ac
 
 class IpcActorStatusEffectList(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ActorStatusEffectList"):
     _fields_ = (
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("level1", ctypes.c_uint8),
         ("level", ctypes.c_uint16),
         ("hp", ctypes.c_uint32),
@@ -996,7 +996,7 @@ class IpcActorStatusEffectList(ctypes.LittleEndianStructure, IpcStructure, opcod
         ("unknown_var_1", ctypes.c_uint8 * 4),
     )
 
-    class_or_job: int
+    class_job: int
     level1: int
     level: int
     hp: int
@@ -1012,7 +1012,7 @@ class IpcActorStatusEffectList(ctypes.LittleEndianStructure, IpcStructure, opcod
 class IpcActorStatusEffectList2(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ActorStatusEffectList2"):
     _fields_ = (
         ("unknown_0x000", ctypes.c_uint32),
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("level1", ctypes.c_uint8),
         ("level", ctypes.c_uint16),
         ("hp", ctypes.c_uint32),
@@ -1025,7 +1025,7 @@ class IpcActorStatusEffectList2(ctypes.LittleEndianStructure, IpcStructure, opco
     )
 
     unknown_0x000: int
-    class_or_job: int
+    class_job: int
     level1: int
     level: int
     hp: int
@@ -1041,7 +1041,7 @@ class IpcActorStatusEffectListBoss(ctypes.LittleEndianStructure, IpcStructure,
                                    opcode_field="ActorStatusEffectListBoss"):
     _fields_ = (
         ("effects_2", StatusEffect * 30),
-        ("class_or_job", ctypes.c_uint8),
+        ("class_job", ctypes.c_uint8),
         ("level1", ctypes.c_uint8),
         ("level", ctypes.c_uint16),
         ("hp", ctypes.c_uint32),
@@ -1055,7 +1055,7 @@ class IpcActorStatusEffectListBoss(ctypes.LittleEndianStructure, IpcStructure,
     )
 
     effects_2: typing.Sequence[StatusEffect]
-    class_or_job: int
+    class_job: int
     level1: int
     level: int
     hp: int

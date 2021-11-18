@@ -1,5 +1,5 @@
 from pyxivdata.common import GameLanguage, GameInstallationRegion
-from pyxivdata.escaped_string import SePayloadUnknown
+from pyxivdata.escaped_string import SePayloadUnknown, SePayload
 from pyxivdata.installation.resource_reader import GameResourceReader
 from pyxivdata.resource.excel.reader import ExdRow
 from pyxivdata.resource.excel.structures import ExhDepth, ExhColumnDataType
@@ -9,13 +9,13 @@ LAST_ROW_ID = 0
 
 
 def __main__():
-    with open("Z:/test.txt", "w") as fp:
+    with open("Z:/test.txt", "w", encoding="utf-8-sig") as fp:
         for language, installation_region in (
-                # (GameLanguage.Japanese, GameInstallationRegion.Japan),
+                (GameLanguage.Japanese, GameInstallationRegion.Japan),
                 (GameLanguage.English, GameInstallationRegion.Japan),
                 (GameLanguage.German, GameInstallationRegion.Japan),
                 (GameLanguage.French, GameInstallationRegion.Japan),
-                (GameLanguage.ChineseSimplified, GameInstallationRegion.MainlandChina),
+                (GameLanguage.ChineseSimplified, r"C:\Program Files (x86)\SNDA\FFXIV\game"),
                 (GameLanguage.Korean, GameInstallationRegion.SouthKorea),
         ):
             with GameResourceReader(installation=installation_region, default_language=[language]) as game:
@@ -40,11 +40,12 @@ def __main__():
                                     continue
                                 val = row[col_id]
                                 for x in val:
-                                    if isinstance(x, SePayloadUnknown) and int(x.type) not in (0x1b, 0x1c):
-                                        fp.write(
-                                            f"{name}({i})[{row.row_id}:{col_id}] = {repr(val)}\n"
-                                        )
-                                        print(f"{name}({i})[{row.row_id}:{col_id}] = {repr(val)}\n")
+                                    if isinstance(x, SePayloadUnknown):
+                                        fp.write(f"{name}({i})[{row.row_id}:{col_id}] = {repr(val)}\n")
+                                        print(f" {repr(val)}")
+                                    elif not isinstance(x, SePayload) or x is None:
+                                        fp.write(f"{name}({i})[{row.row_id}:{col_id}] = {x}\n")
+                                        print(f" {x}")
                     except KeyError:
                         pass
 

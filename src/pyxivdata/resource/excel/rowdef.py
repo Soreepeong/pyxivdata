@@ -24,7 +24,7 @@ class ActionRow(ExdRow):
     name: SeString = 0
     icon: int = 2
     action_category_id: int = 3
-    class_or_job: int = 12
+    class_job: int = 12
     is_role_action: bool = 13
     range: int = 14
     targets_self: bool = 15
@@ -51,7 +51,7 @@ class ActionRow(ExdRow):
     aspect: int = 43
     action_proc_status: int = 44
     status_gain_self: int = 46
-    class_or_job_category: int = 48
+    class_job_category: int = 48
     affects_position: int = 51
     omen: int = 52
     is_pvp: bool = 53

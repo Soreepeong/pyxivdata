@@ -58,53 +58,52 @@ class SeExpressionType(enum.IntEnum):
 
 
 class SePayloadType(enum.IntEnum):
-    Empty = 0x00
-    ResetTime = 0x06
-    Time = 0x07
-    If = 0x08
-    Switch = 0x09
-    ActorFullName = 0x0a  # probably
-    IfEquals = 0x0c
-    IfEndsWithJongseong = 0x0d  # 은/는(eun/neun), 이/가(i/ga), or 을/를(Eul/Reul)
-    IfEndsWithJongseongExceptRieul = 0x0e  # 로/으로(Ro/Euro)
-    IfPlayer = 0x0f  # "You are"/"Someone Else is"
-    NewLine = 0x10
-    BitmapFontIcon = 0x12
-    ColorFill = 0x13
-    ColorBorder = 0x14
-    DialoguePageSeparator = 0x17  # probably
-    Italics = 0x1a
-    Indent = 0x1d
-    Icon2 = 0x1e
-    Hyphen = 0x1f
-    Value = 0x20
-    Format = 0x22
-    TwoDigitValue = 0x24  # f"{:02}"
-    SheetReference = 0x28
-    Highlight = 0x29
-    Link = 0x2b
-    Split = 0x2c
-    Placeholder = 0x2e
-    SheetReferenceJa = 0x30
-    SheetReferenceEn = 0x31
-    SheetReferenceDe = 0x32
-    SheetReferenceFr = 0x33
-    InstanceContent = 0x40
-    UiColorFill = 0x48
-    UiColorBorder = 0x49
-    ZeroPaddedValue = 0x50
-    OrdinalValue = 0x51  # "1st", "2nd", "3rd", ...
+    ResetTime = 0x05
+    Time = 0x06
+    If = 0x07
+    Switch = 0x08
+    ActorFullName = 0x09  # probably
+    IfEquals = 0x0b
+    IfEndsWithJongseong = 0x0c  # 은/는(eun/neun), 이/가(i/ga), or 을/를(Eul/Reul)
+    IfEndsWithJongseongExceptRieul = 0x0d  # 로/으로(Ro/Euro)
+    IfPlayer = 0x0e  # "You are"/"Someone Else is"
+    NewLine = 0x0f
+    BitmapFontIcon = 0x11
+    ColorFill = 0x12
+    ColorBorder = 0x13
+    DialoguePageSeparator = 0x16  # probably
+    Italics = 0x19
+    Indent = 0x1c
+    Icon2 = 0x1d
+    Hyphen = 0x1e
+    Value = 0x1f
+    Format = 0x21
+    TwoDigitValue = 0x23  # f"{:02}"
+    SheetReference = 0x27
+    Highlight = 0x28
+    Link = 0x2a
+    Split = 0x2b
+    Placeholder = 0x2d
+    SheetReferenceJa = 0x2f
+    SheetReferenceEn = 0x30
+    SheetReferenceDe = 0x31
+    SheetReferenceFr = 0x32
+    InstanceContent = 0x3f
+    UiColorFill = 0x47
+    UiColorBorder = 0x48
+    ZeroPaddedValue = 0x4f
+    OrdinalValue = 0x50  # "1st", "2nd", "3rd", ...
 
-    X19 = 0x19  # Part of name?
-    X1b = 0x1b  # Used in QuickChatTransient
-    X1c = 0x1c  # Used in QuickChatTransient
-
-    X16 = 0x16
-    X26 = 0x26
-    X2d = 0x2d
-    X2f = 0x2f
-    X60 = 0x60
-    X61 = 0x61
+    # Following values exist in 0a0000
+    X15 = 0x15  # Used in German and French, on long words. Soft hyphen(U+00AD)?
+    X18 = 0x18
+    X1a = 0x1a  # Used only in QuickChatTransient
+    X1b = 0x1b  # Used only in QuickChatTransient
+    X25 = 0x25  # Used only in Addon; probably some sort of value with preset format (for int)
+    X2c = 0x2c  # Used only in Addon; probably some sort of value with preset format (for string)
+    X2e = 0x2e  # More formatter?
+    X5f = 0x5f  # Takes two values
+    X60 = 0x60  # More formatter?
 
     def __str__(self):
         return f"{self.name}({self.value:02x})"
@@ -412,7 +411,7 @@ class SePayload:
     def __repr__(self):
         type_name = self.type
         if isinstance(type_name, SePayloadType):
-            type_name = type_name.value
+            type_name = type_name.name
         else:
             type_name = f"X{type_name:02x}"
         if not self.expressions:
@@ -955,7 +954,7 @@ class SePayloadDialoguePageSeparator(SePayload, payload_type=SePayloadType.Dialo
     # Possible forced page separator
     #
     # 여기선 모험가 길드에 소속된 사람들에게<br />
-    # &#x27;길드 의뢰&#x27;를 발행하고 있어.<br />
+    # '길드 의뢰'를 발행하고 있어.<br />
     # <SePayload type="DialoguePageSeparator" />당신이 <switch /> 님께<br />
     # 의뢰를 받을 수 있게 되면<br />
     # 일자리를 알선해줄게.
@@ -969,8 +968,23 @@ class SePayloadActorFullName(SePayload, payload_type=SePayloadType.ActorFullName
     pass
 
 
-class SePayloadX19(SePayload, payload_type=SePayloadType.X19, count=(1, 1)):
-    # Oh. Well that was...<i>something</i>. I guess. <0x19 value="1" />...Do you want to play again?
+class SePayloadX15(SePayload, payload_type=SePayloadType.X15, count=(0, 0)):
+    # de: Er<0x15 />fah<0x15 />rungs<0x15 />stufe
+    # de: he<0x15 />raus<0x15 />ge<0x15 />bro<0x15 />chen.
+    # fr: Garde pré<0x15 />cieu<0x15 />se<0x15 />ment ce cristal.
+    # fr: Jifuya est connu de tous ici. Quelqu'un saura cer<0x15 />tai<0x15 />ne<0x15 />ment où il est passé.
+    pass
+
+
+class SePayloadX18(SePayload, payload_type=SePayloadType.X18, count=(1, 1)):
+    # ja: アストリドさん、バートさん、<br />おふたりに、お話ししなければならないことが……。<0x18 value="1" />
+    # en: Oh. Well that was...<i>something</i>. I guess. <0x18 value="1" />...Do you want to play again?
+    # de: Noch ein Abenteurer? <0x18 value="1" />Du kannst passieren.
+    pass
+
+
+class SePayloadX1a(SePayload, payload_type=SePayloadType.X1a, count=(1, 1)):
+    # Used in QuickChatTransient
     pass
 
 
@@ -979,32 +993,68 @@ class SePayloadX1b(SePayload, payload_type=SePayloadType.X1b, count=(1, 1)):
     pass
 
 
-class SePayloadX1c(SePayload, payload_type=SePayloadType.X1c, count=(1, 1)):
-    # Used in QuickChatTransient
+class SePayloadX25(SePayload, payload_type=SePayloadType.X25, count=(3, 3)):
+    # Addon(32)[13095:0] = Speed: <SePayload type="X25"><param>(IntegerParameter=1)</param></SePayload>
     pass
 
 
-class SePayloadX16(SePayload, payload_type=SePayloadType.X16, count=(0, 0)):
+class SePayloadX2c(SePayload, payload_type=SePayloadType.X2c, count=(1, 1)):
+    # Addon(32)[164:0] = <SePayload type="X2c"><param>(StringParameter=1)</param></SePayload>
     pass
 
 
-class SePayloadX26(SePayload, payload_type=SePayloadType.X26, count=(3, 3)):
+class SePayloadX2e(SePayload, payload_type=SePayloadType.X2e, count=(1, 1)):
+    # Addon(32)[11054:0] = Attacking <SePayload type="X2e">
+    #   <param>
+    #       <SePayload type="SheetReference">
+    #           <sheet>ClassJob</sheet>
+    #           <row>(IntegerParameter=1)</row>
+    #           <column>0</column>
+    #       </SePayload>
+    #   </param>
+    # </SePayload>! <SePayload type="X5f">
+    #   <param index="1">1</param>
+    #   <param index="2">101</param>
+    # </SePayload>
+    #
+    # DefaultTalk(244)[592700:20] = <SePayload type="Split">
+    #   <value><SePayload type="Highlight"><param>(ObjectParameter=1)</param></SePayload></value>
+    #   <separator> </separator>
+    #   <index>1</index>
+    # </SePayload>, I've thought long about this, and it's finally time to decide on a proper moogle name for you.
+    # I think Mog<SePayload type="X2e">
+    #   <param>
+    #       <SePayload type="Split">
+    #           <value><SePayload type="Highlight"><param>(ObjectParameter=1)</param></SePayload></value>
+    #           <separator> </separator>
+    #           <index>1</index>
+    #       </SePayload>
+    #   </param>
+    # </SePayload> would fit you perfectly, kupo.
     pass
 
 
-class SePayloadX2d(SePayload, payload_type=SePayloadType.X2d, count=(1, 1)):
+class SePayloadX5f(SePayload, payload_type=SePayloadType.X5f, count=(1, None)):
+    # LogMessage(543)[7523:4] = MPがなくなりました！<SePayload type="X5f">
+    #   <param index="1">1</param>
+    #   <param index="2">99</param>
+    # </SePayload>
+    #
+    # NpcYell(609)[2405:10] = <SePayload type="X5f">
+    #   <param index="1">1</param>
+    #   <param index="2">51</param>
+    # </SePayload>Welcome, ladies and gentlemen! Thank you for joining us for this drawing of the Jumbo Cactpot.
+    #
+    # NpcYell(609)[2469:10] = <SePayload type="X5f">
+    #   <param index="1">0</param>
+    #   <param index="2">63</param>
+    # </SePayload>Perfect! You were born for this!
     pass
 
 
-class SePayloadX2f(SePayload, payload_type=SePayloadType.X2f, count=(1, 1)):
-    pass
-
-
-class SePayloadX60(SePayload, payload_type=SePayloadType.X60, count=(1, None)):
-    pass
-
-
-class SePayloadX61(SePayload, payload_type=SePayloadType.X61, count=(1, 1)):
+class SePayloadX60(SePayload, payload_type=SePayloadType.X60, count=(1, 1)):
+    # Always in format of the following:
+    # <SePayload type="X60"><param>(IntegerParameter=2)</param></SePayload>
     pass
 
 
@@ -1106,8 +1156,8 @@ class SeString:
             if parsed[-1] != SeString.START_BYTE:
                 continue
 
-            payload_type = self._escaped[i]
-            i += 1
+            payload_type = SeExpression.from_buffer_copy(self._escaped, i, self._sheet_reader)
+            i += len(bytes(payload_type))
 
             data_len = SeExpression.from_buffer_copy(self._escaped, i, self._sheet_reader)
             i += len(bytes(data_len))
@@ -1121,8 +1171,7 @@ class SeString:
                 raise ValueError("End byte not found")
             i += 1
 
-            payloads.append(SePayload.from_bytes(payload_bytes, SePayloadType(payload_type),
-                                                 sheet_reader=self._sheet_reader))
+            payloads.append(SePayload.from_bytes(payload_bytes, payload_type, sheet_reader=self._sheet_reader))
 
         self._parsed = parsed.decode("utf-8")
         self._payloads = tuple(payloads)

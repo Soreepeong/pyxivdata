@@ -60,7 +60,7 @@ class ActorControlClassJobChange(ActorControlBase):
 
     def __init__(self, data: IpcActorControl):
         super().__init__(data)
-        self.class_or_job = data.param1
+        self.class_job = data.param1
 
 
 class ActorControlMarkTarget(ActorControlBase):
