@@ -62,7 +62,7 @@ class SePayloadType(enum.IntEnum):
     Time = 0x06
     If = 0x07
     Switch = 0x08
-    ActorFullName = 0x09  # probably
+    ActorFullName = 0x09
     IfEquals = 0x0b
     IfEndsWithJongseong = 0x0c  # 은/는(eun/neun), 이/가(i/ga), or 을/를(Eul/Reul)
     IfEndsWithJongseongExceptRieul = 0x0d  # 로/으로(Ro/Euro)
@@ -71,6 +71,7 @@ class SePayloadType(enum.IntEnum):
     BitmapFontIcon = 0x11
     ColorFill = 0x12
     ColorBorder = 0x13
+    SoftHyphen = 0x15
     DialoguePageSeparator = 0x16  # probably
     Italics = 0x19
     Indent = 0x1c
@@ -95,7 +96,6 @@ class SePayloadType(enum.IntEnum):
     OrdinalValue = 0x50  # "1st", "2nd", "3rd", ...
 
     # Following values exist in 0a0000
-    X15 = 0x15  # Used in German and French, on long words. Soft hyphen(U+00AD)?
     X18 = 0x18
     X1a = 0x1a  # Used only in QuickChatTransient
     X1b = 0x1b  # Used only in QuickChatTransient
@@ -226,6 +226,7 @@ class SeExpressionPredefinedParameter(SeExpression):
 
 class SeExpressionPlayerParameters(enum.IntEnum):
     # https://github.com/xivapi/SaintCoinach/blob/36e9d613f4bcc45b173959eed3f7b5549fd6f540/SaintCoinach/Text/Parameters/PlayerParameters.cs
+    PartyChatForegroundColorIndex = 16
     ActiveClassOrJobIndex = 68
     LevelIndex1 = 69
     LevelIndex2 = 72
@@ -962,17 +963,10 @@ class SePayloadDialoguePageSeparator(SePayload, payload_type=SePayloadType.Dialo
 
 
 class SePayloadActorFullName(SePayload, payload_type=SePayloadType.ActorFullName, count=(1, 1)):
-    # Possible actor full name
-    #
-    # Looks like <0x0a value="(IntegerParameter=1)" /> fished up Lady Luck herself! Here comes a spectral current!
     pass
 
 
-class SePayloadX15(SePayload, payload_type=SePayloadType.X15, count=(0, 0)):
-    # de: Er<0x15 />fah<0x15 />rungs<0x15 />stufe
-    # de: he<0x15 />raus<0x15 />ge<0x15 />bro<0x15 />chen.
-    # fr: Garde pré<0x15 />cieu<0x15 />se<0x15 />ment ce cristal.
-    # fr: Jifuya est connu de tous ici. Quelqu'un saura cer<0x15 />tai<0x15 />ne<0x15 />ment où il est passé.
+class SePayloadSoftHyphen(SePayload, payload_type=SePayloadType.SoftHyphen, count=(0, 0)):
     pass
 
 
