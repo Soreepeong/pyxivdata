@@ -5,7 +5,7 @@ import typing
 from bisect import bisect_left
 
 from pyxivdata.common import GameLanguage
-from pyxivdata.escaped_string import SeString
+from pyxivdata.escaped_string import SeString, SHEET_READER
 from pyxivdata.resource.excel.structures import ExhHeader, ExhColumnDefinition, ExhPageDefinition, ExdHeader, \
     ExdRowLocator, ExdRowHeader, ExhColumnDataType, ExhDepth
 
@@ -18,11 +18,12 @@ PossibleColumnType = typing.Union[SeString, bool, int, float]
 
 def transform_column(col: ExhColumnDefinition,
                      fixed_data: typing.Union[bytes, bytearray, memoryview],
-                     variable_data: typing.Union[bytes, bytearray, memoryview]
+                     variable_data: typing.Union[bytes, bytearray, memoryview],
+                     sheet_reader: typing.Optional[SHEET_READER] = None
                      ) -> PossibleColumnType:
     if col.type == ExhColumnDataType.String:
         string_offset = int.from_bytes(fixed_data[col.offset:col.offset + 4], "big", signed=False)
-        return SeString(variable_data[string_offset:variable_data.index(0, string_offset)])
+        return SeString(variable_data[string_offset:variable_data.index(0, string_offset)], sheet_reader=sheet_reader)
     elif col.type == ExhColumnDataType.Bool:
         return bool(fixed_data[col.offset])
     elif col.type == ExhColumnDataType.Int8:
@@ -60,12 +61,14 @@ class ExdRow:
     def __init__(self, row_id: int, sub_row_id: typing.Optional[int],
                  columns: typing.Sequence[ExhColumnDefinition],
                  fixed_data: typing.Union[bytes, bytearray, memoryview],
-                 variable_data: typing.Union[bytes, bytearray, memoryview]):
+                 variable_data: typing.Union[bytes, bytearray, memoryview],
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
         self._row_id = row_id
         self._sub_row_id = sub_row_id
         self._columns = columns
         self._fixed_data = fixed_data
         self._variable_data = variable_data
+        self._sheet_reader = sheet_reader
 
     def __init_subclass__(cls, **kwargs):
         cls._mapping = {}
@@ -82,9 +85,9 @@ class ExdRow:
     @functools.cache
     def __getitem__(self, item: typing.Union[int, slice]):
         if isinstance(item, int):
-            return transform_column(self._columns[item], self._fixed_data, self._variable_data)
+            return transform_column(self._columns[item], self._fixed_data, self._variable_data, self._sheet_reader)
         elif isinstance(item, slice):
-            return [transform_column(self._columns[x], self._fixed_data, self._variable_data)
+            return [transform_column(self._columns[x], self._fixed_data, self._variable_data, self._sheet_reader)
                     for x in range(len(self._columns))[item]]
         else:
             raise TypeError
@@ -137,13 +140,15 @@ if True:
 
 class AbstractExdReader(abc.ABC):
     def __init__(self, data: bytearray, reader: 'ExcelReader', supported_depth: ExhDepth,
-                 row_type: typing.Type[ExdRow] = ExdRow):
+                 row_type: typing.Type[ExdRow] = ExdRow,
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
         if reader.header.depth != supported_depth:
             raise RuntimeError
 
         self._reader = reader
         self._data = data
         self._row_type = row_type
+        self._sheet_reader = sheet_reader
 
         self._header = ExdHeader.from_buffer(data, 0)
         self._locators = (ExdRowLocator * (self._header.index_size // ctypes.sizeof(ExdRowLocator))
@@ -167,7 +172,7 @@ class AbstractExdReader(abc.ABC):
     def __iter__(self):
         def generator():
             for row in self._locators:
-                yield row.row_id, self._read_row(row)
+                yield self._read_row(row)
 
         return iter(generator())
 
@@ -176,8 +181,9 @@ class AbstractExdReader(abc.ABC):
 
 
 class ExdReaderForDepth2(AbstractExdReader):
-    def __init__(self, data: bytearray, reader: 'ExcelReader', row_type: typing.Type[ExdRow] = ExdRow):
-        super().__init__(data, reader, ExhDepth.Level2, row_type)
+    def __init__(self, data: bytearray, reader: 'ExcelReader', row_type: typing.Type[ExdRow] = ExdRow,
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
+        super().__init__(data, reader, ExhDepth.Level2, row_type, sheet_reader)
 
     def __getitem__(self, item: typing.Union[int, slice]) -> ExdRow:
         return super().__getitem__(item)
@@ -185,13 +191,14 @@ class ExdReaderForDepth2(AbstractExdReader):
     def _read_row(self, locator: ExdRowLocator) -> ExdRow:
         header = ExdRowHeader.from_buffer(self._data, locator.offset)
         data = self._data[locator.offset + ctypes.sizeof(header):][:header.data_size]
-        return self._row_type(locator.row_id, None,
-                              self._reader.columns, data[:self._fixed_size], data[self._fixed_size:])
+        return self._row_type(locator.row_id, None, self._reader.columns, data[:self._fixed_size],
+                              data[self._fixed_size:], self._sheet_reader)
 
 
 class ExdReaderForDepth3(AbstractExdReader):
-    def __init__(self, data: bytearray, reader: 'ExcelReader', row_type: typing.Type[ExdRow] = ExdRow):
-        super().__init__(data, reader, ExhDepth.Level3, row_type)
+    def __init__(self, data: bytearray, reader: 'ExcelReader', row_type: typing.Type[ExdRow] = ExdRow,
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
+        super().__init__(data, reader, ExhDepth.Level3, row_type, sheet_reader)
 
     def __getitem__(self, item: typing.Union[int, slice]) -> typing.List[ExdRow]:
         return super().__getitem__(item)
@@ -203,8 +210,8 @@ class ExdReaderForDepth3(AbstractExdReader):
         rows = []
         for i in range(header.sub_row_count):
             fixed_data = data[i * (2 + self._fixed_size) + 2:][:self._fixed_size]
-            rows.append(self._row_type(locator.row_id, i,
-                                       self._reader.columns, fixed_data, variable_data))
+            rows.append(self._row_type(locator.row_id, i, self._reader.columns, fixed_data, variable_data,
+                                       self._sheet_reader))
         return rows
 
 
@@ -225,10 +232,12 @@ class ExcelReader:
     _default_languages: typing.List[GameLanguage] = [GameLanguage.Undefined]
 
     def __init__(self, reader: typing.Union['SqpackReader', 'GameResourceReader'], name: str,
-                 default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None):
+                 default_language: typing.Union[GameLanguage, typing.Sequence[GameLanguage], None] = None,
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
         self._reader = reader
         self._name = name
         self._row_type = ExdRow.type_from_name(name)
+        self._sheet_reader = sheet_reader
 
         data = reader[f"exd/{name}.exh"].data
         self._header = ExhHeader.from_buffer(data, 0)
@@ -264,9 +273,11 @@ class ExcelReader:
         if exd_key not in self._exd:
             path = f"exd/{self._name}_{page.start_id}{ExcelReader.LANG_SUFFIX[language]}.exd"
             if self._header.depth == ExhDepth.Level2:
-                self._exd[exd_key] = ExdReaderForDepth2(self._reader[path].data, self, self._row_type)
+                self._exd[exd_key] = ExdReaderForDepth2(self._reader[path].data, self, self._row_type,
+                                                        self._sheet_reader)
             elif self._header.depth == ExhDepth.Level3:
-                self._exd[exd_key] = ExdReaderForDepth3(self._reader[path].data, self, self._row_type)
+                self._exd[exd_key] = ExdReaderForDepth3(self._reader[path].data, self, self._row_type,
+                                                        self._sheet_reader)
         return self._exd[exd_key]
 
     @property

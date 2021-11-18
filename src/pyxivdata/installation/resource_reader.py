@@ -136,7 +136,8 @@ class GameResourceReader:
                     raise TypeError
                 item = item.lower()
                 if item not in outer_self._excel_readers:
-                    outer_self._excel_readers[item] = ExcelReader(outer_self, item, outer_self._default_languages)
+                    outer_self._excel_readers[item] = ExcelReader(outer_self, item, outer_self._default_languages,
+                                                                  self.__getitem__)
                 return outer_self._excel_readers[item]
 
             @property
@@ -232,6 +233,6 @@ class GameResourceReader:
         if territory is None:
             if fallback_format is None:
                 raise KeyError
-            return SeString(parsed=fallback_format.format(territory_id), components=())
+            return SeString(parsed=fallback_format.format(territory_id), payloads=())
         placename_index = territory[5]
         return self.get_excel_string("PlaceName", placename_index, 0, language, fallback_format, 0 if title_form else 2)

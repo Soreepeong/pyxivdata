@@ -1,12 +1,20 @@
+import ctypes
 import enum
 import functools
 import html
 import typing
 
+if typing.TYPE_CHECKING:
+    from pyxivdata.resource.excel.rowdef import ExdRow, CompletionRow, MapRow
+    from pyxivdata.resource.excel.reader import ExcelReader
+
+SHEET_READER = typing.Callable[[typing.Union[int, str]], 'ExcelReader']
+
 
 class SeExpressionType(enum.IntEnum):
     # https://github.com/xivapi/SaintCoinach/blob/36e9d613f4bcc45b173959eed3f7b5549fd6f540/SaintCoinach/Text/DecodeExpressionType.cs
 
+    # Predefined parameters
     Xd0 = 0xd0
     Xd1 = 0xd1
     Xd2 = 0xd2
@@ -18,24 +26,33 @@ class SeExpressionType(enum.IntEnum):
     Xd8 = 0xd8
     Xd9 = 0xd9
     Xda = 0xda
-    Xdb = 0xdb
+    Hour = 0xdb  # 0 ~ 23
     Xdc = 0xdc
-    Xdd = 0xdd
+    Weekday = 0xdd  # 1(sunday) ~ 7(saturday)
     Xde = 0xde
     Xdf = 0xdf
 
-    GreaterThanOrEqualTo = 0xe0  # Followed by two variables
-    GreaterThan = 0xe1  # Followed by one variable
-    LessThanOrEqualTo = 0xe2  # Followed by two variables
-    LessThan = 0xe3  # Followed by one variable
-    Equal = 0xe4  # Followed by two variables
-    NotEqual = 0xe5  # TODO: Probably
+    # Binary expressions
+    GreaterThanOrEqualTo = 0xe0
+    GreaterThan = 0xe1
+    LessThanOrEqualTo = 0xe2
+    LessThan = 0xe3
+    Equal = 0xe4
+    NotEqual = 0xe5
+    # Xe6 = 0xe6
+    # Xe7 = 0xe7
 
-    # TODO: I /think/ I got these right.
-    IntegerParameter = 0xe8  # Followed by one variable
-    PlayerParameter = 0xe9  # Followed by one variable
-    StringParameter = 0xeA  # Followed by one variable
-    ObjectParameter = 0xeB  # Followed by one variable
+    # Unary expressions
+    IntegerParameter = 0xe8
+    PlayerParameter = 0xe9
+    StringParameter = 0xea
+    ObjectParameter = 0xeb
+
+    # Alone - what is this?
+    Xec = 0xec
+    # Xed = 0xed
+    # Xee = 0xee
+    # Xef = 0xef
 
     SeString = 0xff  # Followed by length (including length) and data
 
@@ -46,39 +63,28 @@ class SePayloadType(enum.IntEnum):
     Time = 0x07
     If = 0x08
     Switch = 0x09
+    ActorFullName = 0x0a  # probably
     IfEquals = 0x0c
-    KoreanObjectParticle = 0x0d  # 을/를 (Eul/Rul)
-    KoreanDirectionParticle = 0x0e  # 로/으로 (Ro/Euro)
+    IfEndsWithJongseong = 0x0d  # 은/는(eun/neun), 이/가(i/ga), or 을/를(Eul/Reul)
+    IfEndsWithJongseongExceptRieul = 0x0e  # 로/으로(Ro/Euro)
+    IfPlayer = 0x0f  # "You are"/"Someone Else is"
     NewLine = 0x10
-    Icon1 = 0x12
-    ColorChange = 0x13
+    BitmapFontIcon = 0x12
+    ColorFill = 0x13
+    ColorBorder = 0x14
+    DialoguePageSeparator = 0x17  # probably
     Italics = 0x1a
     Indent = 0x1d
     Icon2 = 0x1e
-    Dash = 0x1f
+    Hyphen = 0x1f
     Value = 0x20
     Format = 0x22
     TwoDigitValue = 0x24  # f"{:02}"
-    X23 = 0x23
-    X24 = 0x24
-    X25 = 0x25
-    # Map link at Zadnor (8.4, 24.2) (c9 04 f2 03 cf f2 02 99 fe ff f6 10 bb f6 02 24 4d fe ff ff 8a d0)
-    Interactable = 0x27  # Player, Item, Map Link, Status, Quest
     SheetReference = 0x28
     Highlight = 0x29
-    Link = 0x2b  # TODO: how are Interactable and Link different?
+    Link = 0x2b
     Split = 0x2c
-
-    # The Orbonne Monastery (33f20b30):
-    #     Completion (category=0x33=51)
-    #         Lookup column(2) specified (PlaceName[20-37,39-59,...,2864-2864,...])
-    #     PlaceName (row_id=0xb30=2864)
-    # Let's do it! (02f0e3)
-    #     Completion (category=2, row_id=0xE3=227)
-    # Let's rest for a while. (08f2033a)
-    #     Completion (category=8, row_id=0x033a=826)
-    # <se.##> (c9 06 ##)
-    AutoTranslateKey = 0x2e
+    Placeholder = 0x2e
     SheetReferenceJa = 0x30
     SheetReferenceEn = 0x31
     SheetReferenceDe = 0x32
@@ -87,20 +93,16 @@ class SePayloadType(enum.IntEnum):
     UiColorFill = 0x48
     UiColorBorder = 0x49
     ZeroPaddedValue = 0x50
+    OrdinalValue = 0x51  # "1st", "2nd", "3rd", ...
 
-    X0a = 0x0a  # Probably source player
-    X0f = 0x0f
-    X14 = 0x14
+    X19 = 0x19  # Part of name?
+    X1b = 0x1b  # Used in QuickChatTransient
+    X1c = 0x1c  # Used in QuickChatTransient
+
     X16 = 0x16
-    X17 = 0x17
-    X19 = 0x19
     X26 = 0x26
     X2d = 0x2d
-
     X2f = 0x2f
-    X32 = 0x32
-    X33 = 0x33
-    X51 = 0x51
     X60 = 0x60
     X61 = 0x61
 
@@ -110,6 +112,10 @@ class SePayloadType(enum.IntEnum):
 
 class SeExpression:
     _buffer: typing.Optional[bytes] = None
+    _sheet_reader: typing.Optional[SHEET_READER] = None
+
+    def __init__(self, sheet_reader: typing.Optional[SHEET_READER] = None):
+        self._sheet_reader = sheet_reader
 
     def __bytes__(self):
         return self._buffer
@@ -121,24 +127,17 @@ class SeExpression:
     def from_value(cls, value: typing.Union[int, str, 'SeExpression']):
         if isinstance(value, SeExpression):
             return value
-        elif type(value) is int:
+        elif isinstance(value, int):
             return SeExpressionUint32(value)
         elif isinstance(value, str):
             return SeExpressionSeString(SeString(value))
         elif isinstance(value, SeString):
             return SeExpressionSeString(value)
-        raise TypeError(f"Value {value} is not implicitly convertible to a SeExpression.")
+        raise TypeError(f"Value {value} of type {type(value)} is not implicitly convertible to a SeExpression.")
 
-    @classmethod
-    def from_buffer_copy(cls, data: typing.Union[bytes, bytearray, memoryview], offset: typing.Optional[int] = None):
-        if offset is None:
-            offset = 0
-
-        if cls is not SeExpression:
-            self = super(cls, SeExpression).__new__(cls)
-            self._buffer = data[offset:]
-            return self
-
+    @staticmethod
+    def from_buffer_copy(data: typing.Union[bytes, bytearray, memoryview], offset: int = 0,
+                         sheet_reader: typing.Optional[SHEET_READER] = None):
         begin = offset
         marker = data[offset]
         offset += 1
@@ -147,19 +146,22 @@ class SeExpression:
             self = SeExpressionUint32(value)
 
         elif 0xD0 <= marker <= 0xDF:
-            self = SeExpressionPredefinedParameter(SeExpressionType(marker))
+            self = SeExpressionPredefinedParameter(SeExpressionType(marker), sheet_reader)
 
-        elif marker in (0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5):
-            operand1 = SeExpression.from_buffer_copy(data, offset)
+        elif 0xE0 <= marker <= 0xE5:
+            operand1 = SeExpression.from_buffer_copy(data, offset, sheet_reader)
             offset += len(bytes(operand1))
-            operand2 = SeExpression.from_buffer_copy(data, offset)
+            operand2 = SeExpression.from_buffer_copy(data, offset, sheet_reader)
             offset += len(bytes(operand2))
-            self = SeExpressionBinary(SeExpressionType(marker), operand1, operand2)
+            self = SeExpressionBinary(SeExpressionType(marker), operand1, operand2, sheet_reader)
 
-        elif marker in (0xE8, 0xE9, 0xEA, 0xEB):
-            operand = SeExpression.from_buffer_copy(data, offset)
+        elif 0xE8 <= marker <= 0xEB:
+            operand = SeExpression.from_buffer_copy(data, offset, sheet_reader)
             offset += len(bytes(operand))
-            self = SeExpressionUnary(SeExpressionType(marker), operand)
+            self = SeExpressionUnary(SeExpressionType(marker), operand, sheet_reader)
+
+        elif 0xEC <= marker <= 0xEC:
+            self = SeExpressionPredefinedParameter(SeExpressionType(marker), sheet_reader)  # TODO: what is this?
 
         elif 0xF0 <= marker <= 0xFE:
             marker = (marker + 1) & 0xF
@@ -175,11 +177,11 @@ class SeExpression:
             self = SeExpressionUint32(value)
 
         elif marker == SeExpressionType.SeString:
-            se_string_len = SeExpression.from_buffer_copy(data, offset)
+            se_string_len = SeExpression.from_buffer_copy(data, offset, sheet_reader)
             offset += len(bytes(se_string_len))
-            se_string = SeString(data[offset:offset + se_string_len])
+            se_string = SeString(data[offset:offset + se_string_len], sheet_reader=sheet_reader)
             offset += len(bytes(se_string))
-            self = SeExpressionSeString(se_string)
+            self = SeExpressionSeString(se_string, sheet_reader)
 
         else:
             raise ValueError(f"Marker 0x{marker:02x} is not a valid SeUint32.")
@@ -188,7 +190,8 @@ class SeExpression:
 
 
 class SeExpressionSeString(SeExpression):
-    def __init__(self, data: 'SeString'):
+    def __init__(self, data: 'SeString', sheet_reader: typing.Optional[SHEET_READER] = None):
+        super().__init__(sheet_reader)
         self._data = data
 
     def __bytes__(self):
@@ -203,7 +206,8 @@ class SeExpressionSeString(SeExpression):
 
 
 class SeExpressionPredefinedParameter(SeExpression):
-    def __init__(self, expression_type: SeExpressionType):
+    def __init__(self, expression_type: SeExpressionType, sheet_reader: typing.Optional[SHEET_READER] = None):
+        super().__init__(sheet_reader)
         self._type = expression_type
 
     @property
@@ -231,7 +235,9 @@ class SeExpressionPlayerParameters(enum.IntEnum):
 
 
 class SeExpressionUnary(SeExpression):
-    def __init__(self, expression_type: SeExpressionType, operand: SeExpression):
+    def __init__(self, expression_type: SeExpressionType, operand: SeExpression,
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
+        super().__init__(sheet_reader)
         self._type = expression_type
         self._operand = operand
 
@@ -260,7 +266,9 @@ class SeExpressionUnary(SeExpression):
 
 
 class SeExpressionBinary(SeExpression):
-    def __init__(self, expression_type: SeExpressionType, operand1: SeExpression, operand2: SeExpression):
+    def __init__(self, expression_type: SeExpressionType, operand1: SeExpression, operand2: SeExpression,
+                 sheet_reader: typing.Optional[SHEET_READER] = None):
+        super().__init__(sheet_reader)
         self._type = expression_type
         self._operand1 = operand1
         self._operand2 = operand2
@@ -320,117 +328,62 @@ class SeExpressionUint32(int, SeExpression):
 class SePayload:
     _implemented_payload_types: typing.ClassVar[typing.Dict[SePayloadType, typing.Type['SePayload']]] = {}
 
-    ESCAPE_TYPE: typing.ClassVar[typing.Optional[SePayloadType]]
+    PAYLOAD_TYPE: typing.ClassVar[typing.Optional[SePayloadType]] = None
+    MIN_EXPRESSION_COUNT: typing.ClassVar[typing.Optional[int]] = None
+    MAX_EXPRESSION_COUNT: typing.ClassVar[typing.Optional[int]] = None
 
     _buffer: bytes
+    _sheet_reader: typing.Optional[SHEET_READER]
 
-    def __init_subclass__(cls, escape_type: typing.Optional[SePayloadType] = None, **kwargs):
-        cls.ESCAPE_TYPE = escape_type
-        if escape_type is not None:
-            cls._implemented_payload_types[escape_type] = cls
+    def __init_subclass__(cls,
+                          payload_type: typing.Optional[SePayloadType] = None,
+                          count: typing.Tuple[typing.Optional[int], typing.Optional[int]] = (None, None),
+                          **kwargs):
+        cls.PAYLOAD_TYPE = payload_type
+        cls.MIN_EXPRESSION_COUNT, cls.MAX_EXPRESSION_COUNT = count
+        if payload_type is not None:
+            cls._implemented_payload_types[payload_type] = cls
 
     @classmethod
-    def from_bytes(cls, escape_type: SePayloadType, data: typing.Union[bytearray, bytes, memoryview]):
-        t = cls._implemented_payload_types.get(escape_type, None)
+    def _validate_expression_count_or_throw(cls, count):
+        if cls.MIN_EXPRESSION_COUNT is not None and count < cls.MIN_EXPRESSION_COUNT:
+            raise ValueError(f"{cls.__name__}: Too few expressions({count} < {cls.MIN_EXPRESSION_COUNT})")
+        if cls.MAX_EXPRESSION_COUNT is not None and count > cls.MAX_EXPRESSION_COUNT:
+            raise ValueError(f"{cls.__name__}: Too many expressions({count} > {cls.MAX_EXPRESSION_COUNT})")
+
+    @classmethod
+    def from_bytes(cls, data: typing.Union[bytearray, bytes, memoryview],
+                   payload_type: typing.Optional[typing.Union[int, SePayloadType]] = None,
+                   sheet_reader: typing.Optional[SHEET_READER] = None):
+        if payload_type is None:
+            payload_type = cls.type
+        try:
+            payload_type = SePayloadType(payload_type)
+        except ValueError:
+            pass
+        t = cls._implemented_payload_types.get(payload_type, None)
         if t is None:
-            return SePayloadUnknown(escape_type, data)
-        return t(data)
+            self = SePayloadUnknown(data, sheet_reader=sheet_reader)
+            self._payload_type = payload_type
+        else:
+            self = t(data, sheet_reader=sheet_reader)
+        return self
 
-    def __init__(self, data: typing.Union[bytearray, bytes, memoryview] = b""):
+    @classmethod
+    def from_values(cls, *values: typing.Union[int, str, SeExpression],
+                    payload_type: typing.Optional[typing.Union[int, SePayloadType]] = None):
+        cls._validate_expression_count_or_throw(len(values))
+        return SePayload.from_bytes(b"".join(bytes(SeExpression.from_value(v)) for v in values), payload_type)
+
+    def __new__(cls, data: typing.Union[bytearray, bytes, memoryview] = b"",
+                sheet_reader: typing.Optional[SHEET_READER] = None):
+        self = super().__new__(cls)
         self._buffer = bytes(data)
+        self._sheet_reader = sheet_reader
+        return self
 
-    @property
-    def type(self) -> SePayloadType:
-        return self.ESCAPE_TYPE
-
-    def __bytes__(self):
-        return self._buffer
-
-    def __repr__(self):
-        if not self._buffer:
-            return f"<{self.type.name} />"
-        return f"<{self.type.name}>{self._buffer.hex()}</{self.type.name}>"
-
-
-class SePayloadUnknown(SePayload):
-    def __init__(self, escape_type: SePayloadType, data: typing.Union[bytearray, bytes, memoryview]):
-        super().__init__(data)
-        self._escape_type = escape_type
-
-    @property
-    def type(self):
-        return self._escape_type
-
-
-class SePayloadNewLine(SePayload, escape_type=SePayloadType.NewLine):
-    pass
-
-
-class SePayloadDash(SePayload, escape_type=SePayloadType.Dash):
-    pass
-
-
-class SePayloadWithExpression1(SePayload):
-    @classmethod
-    def from_value(cls, value: typing.Union[int, str, SeExpression]):
-        return SePayloadWithExpression1(bytes(SeExpression.from_value(value)))
-
-    @functools.cached_property
-    def value(self):
-        return SeExpression.from_buffer_copy(self._buffer)
-
-    def __bool__(self):
-        return self.value != 0
-
-    def __repr__(self):
-        return f"""<{self.type.name} value="{self.value}" />"""
-
-
-class SePayloadUiColorBorder(SePayloadWithExpression1, escape_type=SePayloadType.UiColorBorder):
-    pass
-
-
-class SePayloadUiColorFill(SePayloadWithExpression1, escape_type=SePayloadType.UiColorFill):
-    pass
-
-
-class SePayloadHighlight(SePayloadWithExpression1, escape_type=SePayloadType.Highlight):
-    pass
-
-
-class SePayloadTwoDigitValue(SePayloadWithExpression1, escape_type=SePayloadType.TwoDigitValue):
-    pass
-
-
-class SePayloadValue(SePayloadWithExpression1, escape_type=SePayloadType.Value):
-    pass
-
-
-class SePayloadTime(SePayloadWithExpression1, escape_type=SePayloadType.Time):
-    pass
-
-
-class SePayloadItalics(SePayloadWithExpression1, escape_type=SePayloadType.Italics):
-    pass
-
-
-class SePayloadWithSequentialExpressionsBase(SePayload):
-    _min_expressions: typing.ClassVar[typing.Optional[int]] = None
-    _max_expressions: typing.ClassVar[typing.Optional[int]] = None
-
-    def __init_subclass__(cls, max_expressions: typing.Optional[int] = None,
-                          min_expressions: typing.Optional[int] = None, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls._max_expressions = max_expressions
-        cls._min_expressions = min_expressions
-
-    @classmethod
-    def from_values(cls, *values: typing.Union[int, str, SeExpression]):
-        if cls._min_expressions is not None and len(values) < cls._min_expressions:
-            raise ValueError(f"Number of expressions({len(values)} < Min number of expression({cls._min_expressions}")
-        if cls._max_expressions is not None and len(values) > cls._max_expressions:
-            raise ValueError(f"Number of expressions({len(values)} > Max number of expression({cls._max_expressions}")
-        return SePayloadWithSequentialExpressionsBase(b"".join(bytes(SeExpression.from_value(v)) for v in values))
+    def set_sheet_reader(self, reader: SHEET_READER):
+        self._sheet_reader = reader
 
     @functools.cached_property
     def expressions(self):
@@ -439,21 +392,115 @@ class SePayloadWithSequentialExpressionsBase(SePayload):
         while offset < len(self._buffer):
             res.append(SeExpression.from_buffer_copy(self._buffer, offset))
             offset += len(bytes(res[-1]))
-        if self._min_expressions is not None and len(res) < self._min_expressions:
-            raise ValueError(f"Number of expressions({len(res)} < Min number of expression({self._min_expressions}")
-        if self._max_expressions is not None and len(res) > self._max_expressions:
-            raise ValueError(f"Number of expressions({len(res)} > Max number of expression({self._max_expressions}")
+        self._validate_expression_count_or_throw(len(res))
         return tuple(res)
 
+    @property
+    def _repr_expression_names(self):
+        return "param",
+
+    @property
+    def type(self) -> int:
+        return self.PAYLOAD_TYPE
+
+    def __bytes__(self):
+        return self._buffer
+
+    def _repr_extra(self) -> typing.Optional[str]:
+        return None
+
     def __repr__(self):
-        res = [f"""<{self.type.name}>"""]
-        for k, v in enumerate(self.expressions):
-            res.append(f"""<expression index="{k}">{repr(v)}</case>""")
-        res.append(f"</{self.type.name}>")
+        type_name = self.type
+        if isinstance(type_name, SePayloadType):
+            type_name = type_name.value
+        else:
+            type_name = f"X{type_name:02x}"
+        if not self.expressions:
+            return f"<SePayload type=\"{type_name}\" />"
+
+        extra = self._repr_extra()
+        if extra is not None:
+            res = [f"<SePayload type=\"{type_name}\" representation=\"{html.escape(str(extra))}\">"]
+        else:
+            res = [f"<SePayload type=\"{type_name}\">"]
+        names = self._repr_expression_names
+        if (len(self.expressions) == self.MIN_EXPRESSION_COUNT
+                and self.MIN_EXPRESSION_COUNT == self.MAX_EXPRESSION_COUNT):
+            for name, v in zip(names, self.expressions):
+                res.append(f"""<{name}>{repr(v)}</{name}>""")
+        else:
+            for i, v in enumerate(self.expressions):
+                if i < len(names) - 1:
+                    res.append(f"""<{names[i]}>{repr(v)}</{names[i]}>""")
+                else:
+                    res.append(f"""<{names[-1]} index="{2 + i - len(names)}">{repr(v)}</{names[-1]}>""")
+        res.append(f"</SePayload>")
         return "".join(res)
 
 
-class SePayloadFormat(SePayloadWithSequentialExpressionsBase, escape_type=SePayloadType.Format, max_expressions=2):
+class SePayloadUnknown(SePayload):
+    _payload_type: SePayloadType
+
+    @property
+    def type(self):
+        return self._payload_type
+
+
+class SePayloadNewLine(SePayload, payload_type=SePayloadType.NewLine, count=(0, 0)):
+    pass
+
+
+class SePayloadHyphen(SePayload, payload_type=SePayloadType.Hyphen, count=(0, 0)):
+    pass
+
+
+class SePayloadIndent(SePayload, payload_type=SePayloadType.Indent, count=(0, 0)):
+    pass
+
+
+class SePayloadUiColorBorder(SePayload, payload_type=SePayloadType.UiColorBorder, count=(1, 1)):
+    pass
+
+
+class SePayloadUiColorFill(SePayload, payload_type=SePayloadType.UiColorFill, count=(1, 1)):
+    pass
+
+
+class SePayloadHighlight(SePayload, payload_type=SePayloadType.Highlight, count=(1, 1)):
+    pass
+
+
+class SePayloadTwoDigitValue(SePayload, payload_type=SePayloadType.TwoDigitValue, count=(1, 1)):
+    pass
+
+
+class SePayloadValue(SePayload, payload_type=SePayloadType.Value, count=(1, 1)):
+    pass
+
+
+class SePayloadZeroPaddedValue(SePayload, payload_type=SePayloadType.ZeroPaddedValue, count=(2, 2)):
+    @property
+    def value(self):
+        return self.expressions[0]
+
+    @property
+    def pad(self):
+        return self.expressions[1]
+
+    @property
+    def _repr_expression_names(self):
+        return "value", "pad"
+
+
+class SePayloadTime(SePayload, payload_type=SePayloadType.Time, count=(1, 1)):
+    pass
+
+
+class SePayloadItalics(SePayload, payload_type=SePayloadType.Italics, count=(1, 1)):
+    pass
+
+
+class SePayloadFormat(SePayload, payload_type=SePayloadType.Format, count=(2, 2)):
     @property
     def value(self):
         return self.expressions[0]
@@ -462,12 +509,12 @@ class SePayloadFormat(SePayloadWithSequentialExpressionsBase, escape_type=SePayl
     def format(self):
         return self.expressions[1]
 
-    def __repr__(self):
-        return f"""<{self.type.name} value="{self.value}" format="{self.format}" />"""
+    @property
+    def _repr_expression_names(self):
+        return "value", "format"
 
 
-class SePayloadSheetReference(SePayloadWithSequentialExpressionsBase, escape_type=SePayloadType.SheetReference,
-                              min_expressions=2):
+class SePayloadSheetReference(SePayload, payload_type=SePayloadType.SheetReference, count=(2, None)):
     @property
     def sheet_name(self):
         return self.expressions[0]
@@ -487,23 +534,12 @@ class SePayloadSheetReference(SePayloadWithSequentialExpressionsBase, escape_typ
     def parameters(self):
         return self.expressions[3:]
 
-    def __repr__(self):
-        res = [
-            f"<{self.type.name}",
-            f' sheet="{html.escape(repr(self.sheet_name))}"',
-            f' row="{html.escape(repr(self.row_id))}"',
-        ]
-        if self.column_id is not None:
-            res.append(f' column="{html.escape(repr(self.column_id))}"')
-        res.append(">")
-        if self.parameters:
-            for i, p in enumerate(self.parameters):
-                res.append(f"""<param index="{i}">{repr(p)}</param>""")
-        res.append(f"</{self.type.name}>")
-        return "".join(res)
+    @property
+    def _repr_expression_names(self):
+        return "sheet", "row", "column", "parameter"
 
 
-class SePayloadSheetLanguageReference(SePayloadWithSequentialExpressionsBase, min_expressions=3):
+class SePayloadSheetLanguageReference(SePayload, count=(3, None)):
     @property
     def sheet_name(self):
         return self.expressions[0]
@@ -527,56 +563,32 @@ class SePayloadSheetLanguageReference(SePayloadWithSequentialExpressionsBase, mi
     def parameters(self):
         return self.expressions[4:]
 
-    def __repr__(self):
-        res = [
-            f"<{self.type.name}",
-            f' sheet="{html.escape(repr(self.sheet_name))}"',
-            f' row="{html.escape(repr(self.row_id))}"',
-        ]
-        if self.column_id is not None:
-            res.append(f' column="{html.escape(repr(self.column_id))}"')
-        res.append(">")
-        res.append(f"<attribute>{repr(self.attribute)}</attribute>")
-        if self.parameters:
-            for i, p in enumerate(self.parameters):
-                res.append(f"""<param index="{i}">{repr(p)}</param>""")
-        res.append(f"</{self.type.name}>")
-        return "".join(res)
-
-
-class SePayloadSheetLanguageReferenceJa(SePayloadSheetLanguageReference, escape_type=SePayloadType.SheetReferenceJa):
-    pass
-
-
-class SePayloadSheetLanguageReferenceEn(SePayloadSheetLanguageReference, escape_type=SePayloadType.SheetReferenceEn):
-    pass
-
-
-class SePayloadSheetLanguageReferenceDe(SePayloadSheetLanguageReference, escape_type=SePayloadType.SheetReferenceDe):
-    pass
-
-
-class SePayloadSheetLanguageReferenceFr(SePayloadSheetLanguageReference, escape_type=SePayloadType.SheetReferenceFr):
-    pass
-
-
-class SePayloadConditionalExpressionBase(SePayloadWithSequentialExpressionsBase):
     @property
-    def cases(self) -> typing.Dict[any, typing.Optional[SeExpression]]:
-        raise NotImplementedError
-
-    def _repr_condition(self) -> str:
-        raise NotImplementedError
-
-    def __repr__(self):
-        res = [f"""<{self.type.name} condition="{html.escape(self._repr_condition())}">"""]
-        for k, v in self.cases.items():
-            res.append(f"""<case when="{k}">{repr(v)}</case>""")
-        res.append(f"</{self.type.name}>")
-        return "".join(res)
+    def _repr_expression_names(self):
+        return "sheet", "row", "attribute", "column", "parameter"
 
 
-class SePayloadIf(SePayloadConditionalExpressionBase, escape_type=SePayloadType.If):
+class SePayloadSheetLanguageReferenceJa(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceJa):
+    pass
+
+
+class SePayloadSheetLanguageReferenceEn(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceEn):
+    pass
+
+
+class SePayloadSheetLanguageReferenceDe(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceDe):
+    pass
+
+
+class SePayloadSheetLanguageReferenceFr(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceFr):
+    pass
+
+
+class SePayloadLink(SePayload, payload_type=SePayloadType.Link, count=(1, 1)):
+    pass
+
+
+class SePayloadIf(SePayload, payload_type=SePayloadType.If, count=(1, None)):
     @property
     def condition(self):
         return self.expressions[0]
@@ -600,19 +612,11 @@ class SePayloadIf(SePayloadConditionalExpressionBase, escape_type=SePayloadType.
         return self.expressions[3:]
 
     @property
-    def cases(self) -> typing.Dict[any, typing.Optional[SeExpression]]:
-        # noinspection PyTypeChecker
-        return {
-            True: self.true_value,
-            False: self.false_value,
-            **dict(enumerate(self.misc_values))
-        }
-
-    def _repr_condition(self) -> str:
-        return repr(self.condition)
+    def _repr_expression_names(self):
+        return "condition", "true", "false", "misc"
 
 
-class SePayloadIfEquals(SePayloadConditionalExpressionBase, escape_type=SePayloadType.IfEquals):
+class SePayloadIfEquals(SePayload, payload_type=SePayloadType.IfEquals, count=(2, None)):
     @property
     def left(self):
         return self.expressions[0]
@@ -640,19 +644,11 @@ class SePayloadIfEquals(SePayloadConditionalExpressionBase, escape_type=SePayloa
         return self.expressions[4:]
 
     @property
-    def cases(self) -> typing.Dict[any, typing.Optional[SeExpression]]:
-        # noinspection PyTypeChecker
-        return {
-            True: self.true_value,
-            False: self.false_value,
-            **dict(enumerate(self.misc_values))
-        }
-
-    def _repr_condition(self) -> str:
-        return f"{self.left} == {self.right}"
+    def _repr_expression_names(self):
+        return "left", "right", "true", "false", "misc"
 
 
-class SePayloadSwitch(SePayloadConditionalExpressionBase, escape_type=SePayloadType.Switch):
+class SePayloadSwitch(SePayload, payload_type=SePayloadType.Switch, count=(1, None)):
     @property
     def condition(self):
         return self.expressions[0]
@@ -661,8 +657,355 @@ class SePayloadSwitch(SePayloadConditionalExpressionBase, escape_type=SePayloadT
     def cases(self):
         return {i: x for i, x in enumerate(self.expressions[1:], 1)}
 
-    def _repr_condition(self) -> str:
-        return repr(self.condition)
+    @property
+    def _repr_expression_names(self):
+        return "condition", "case"
+
+
+class SePayloadIfPlayer(SePayload, payload_type=SePayloadType.IfPlayer, count=(3, 3)):
+    @property
+    def actor_id(self):
+        return self.expressions[0]
+
+    @property
+    def player_value(self):
+        return self.expressions[1]
+
+    @property
+    def someone_else_value(self):
+        return self.expressions[2]
+
+    @property
+    def _repr_expression_names(self):
+        return "actor_id", "player", "someone_else"
+
+
+class SePayloadBitmapFontIcon(SePayload, payload_type=SePayloadType.BitmapFontIcon, count=(1, 1)):
+    pass
+
+
+class SePayloadIcon2(SePayload, payload_type=SePayloadType.Icon2, count=(1, 1)):
+    pass
+
+
+class SePayloadPlaceholder(SePayload, payload_type=SePayloadType.Placeholder, count=(2, None)):
+    def __new__(cls, data: typing.Union[bytearray, bytes, memoryview] = b"",
+                sheet_reader: typing.Optional[SHEET_READER] = None):
+        if cls is SePayloadPlaceholder:
+            if SeExpression.from_buffer_copy(data, 0) == 0xc8:
+                return SePayloadPlaceholderComplex(data, sheet_reader)
+            else:
+                return SePayloadPlaceholderCompletion(data, sheet_reader)
+        return super().__new__(cls, data, sheet_reader)
+
+    @property
+    def type(self):
+        return SePayloadType.Placeholder
+
+    @property
+    def group_id(self):
+        return self.expressions[0] + 1
+
+    @property
+    def _repr_expression_names(self):
+        return "group_id", "param"
+
+
+class SePayloadPlaceholderCompletion(SePayloadPlaceholder, count=(2, 2)):
+    @property
+    def row_id(self):
+        return self.expressions[1]
+
+    @property
+    def completion(self):
+        if self._sheet_reader is None:
+            return None
+        reader: 'ExcelReader' = self._sheet_reader("Completion")
+        row: typing.Union['CompletionRow', 'ExdRow']
+        try:
+            return reader[self.row_id].text
+        except KeyError:
+            pass
+        for row in reader:
+            if row.group_id == self.group_id:
+                break
+        else:
+            return None
+        reader = self._sheet_reader(str(row.lookup_table).split("[", 1)[0])
+        try:
+            row = reader[self.row_id]
+            if hasattr(row, 'name'):
+                return row.name
+            return row[0]
+        except KeyError:
+            return None
+
+    @property
+    def _repr_expression_names(self):
+        return "group_id", "row_id"
+
+    def _repr_extra(self):
+        return self.completion
+
+
+class SePayloadPlaceholderComplex(SePayloadPlaceholder, count=(3, None)):
+    _complex_type_map: typing.ClassVar[typing.Dict[int, typing.Type['SePayloadPlaceholderComplex']]] = {}
+
+    COMPLEX_TYPE: typing.ClassVar[typing.Optional[int]] = None
+
+    def __init_subclass__(cls, complex_type: typing.Optional[int] = None, **kwargs):
+        if complex_type is not None:
+            cls.COMPLEX_TYPE = complex_type
+            cls._complex_type_map[complex_type] = cls
+
+    def __new__(cls, data: typing.Union[bytearray, bytes, memoryview] = b"",
+                sheet_reader: typing.Optional[SHEET_READER] = None):
+        if cls is SePayloadPlaceholderComplex:
+            subinfo_type = SeExpression.from_buffer_copy(data, len(bytes(SeExpression.from_buffer_copy(data, 0))))
+            c = cls._complex_type_map.get(int(subinfo_type), None)
+            if c is not None:
+                return c(data, sheet_reader)
+        return super().__new__(cls, data, sheet_reader)
+
+    @property
+    def complex_type(self):
+        return self.expressions[1]
+
+    @property
+    def _repr_expression_names(self):
+        return "group_id", "complex_type"
+
+
+class SePayloadPlaceholderMapPositionLink(SePayloadPlaceholderComplex, count=(7, 7), complex_type=3):
+    @property
+    def territory_type_id(self):
+        return self.expressions[2]
+
+    @property
+    def map_id(self):
+        return self.expressions[3]
+
+    @property
+    def raw_x(self):
+        return ctypes.c_int32(self.expressions[4]).value
+
+    @property
+    def raw_y(self):
+        return ctypes.c_int32(self.expressions[5]).value
+
+    @property
+    def raw_z(self):
+        return ctypes.c_int32(self.expressions[6]).value
+
+    @property
+    def x(self):
+        return self.raw_x / 1000
+
+    @property
+    def y(self):
+        return self.raw_y / 1000
+
+    @property
+    def z(self):
+        return self.raw_z / 1000
+
+    @property
+    def display_x(self):
+        return self._pixels_to_display_unit(self.x)
+
+    @property
+    def display_y(self):
+        return self._pixels_to_display_unit(self.y)
+
+    @property
+    def display_z(self):
+        return self._pixels_to_display_unit(self.z)
+
+    def _pixels_to_display_unit(self, pixels: float):
+        c = self.map.size_factor / 100.
+        scaled_pos = pixels * c
+
+        # displayed 25.2, 31.3
+        # 40.90 (25.2, 31.3, 20.9)
+        # 40.89 (25.2, 31.3, 20.8)
+        # 40.885 (25.2, 31.2, 20.8)
+        # 40.88 (25.2, 31.2, 20.8)
+        #
+        # displayed 7.3, 29.3
+        # 40.90 (7.4, 29.3, 20.9)
+        # 40.89 (7.4, 29.3, 20.9)
+        #  40.885 (7.4, 29.3, 20.8)
+        #
+        # ^ rounding doesn't work. maybe it's flooring?
+
+        return 40.885 / c * ((scaled_pos + 1024.) / 2048.) + 1.
+
+    @functools.cached_property
+    def map(self) -> typing.Union['MapRow', 'ExdRow']:
+        return self._sheet_reader("Map")[self.map_id]
+
+    def _repr_extra(self) -> typing.Optional[str]:
+        return f"{self.display_x:.01f}, {self.display_y:.01f}, {self.display_z:.01f}"
+
+    @property
+    def _repr_expression_names(self):
+        return "group_id", "complex_type", "territory_type_id", "map_id", "raw_x", "raw_y", "raw_z"
+
+
+class SePayloadPlaceholderSoundEffect(SePayloadPlaceholderComplex, count=(3, 3), complex_type=5):
+    @property
+    def sound_effect_id(self):
+        # <se.1> = 0, <se.1> = 2, etc.
+        return self.expressions[2]
+
+    @property
+    def _repr_expression_names(self):
+        return "group_id", "complex_type", "sound_effect_id"
+
+
+class SePayloadColorFill(SePayload, payload_type=SePayloadType.ColorFill, count=(1, 1)):
+    pass
+
+
+class SePayloadColorBorder(SePayload, payload_type=SePayloadType.ColorBorder, count=(1, 1)):
+    pass
+
+
+class SePayloadOrdinalValue(SePayload, payload_type=SePayloadType.OrdinalValue, count=(1, 1)):
+    pass
+
+
+class SePayloadInstantContent(SePayload, payload_type=SePayloadType.InstanceContent, count=(1, 1)):
+    pass
+
+
+class SePayloadResetTime(SePayload, payload_type=SePayloadType.ResetTime, count=(1, 2)):
+    @property
+    def hour_utc9(self):
+        return self.expressions[0]
+
+    @property
+    def weekday(self):
+        try:
+            return self.expressions[1]
+        except KeyError:
+            return None
+
+    @property
+    def _repr_expression_names(self):
+        return "hour_utc9", "weekday"
+
+
+class SePayloadSplit(SePayload, payload_type=SePayloadType.Split, count=(3, 3)):
+    @property
+    def value(self):
+        return self.expressions[0]
+
+    @property
+    def separator(self):
+        return self.expressions[1]
+
+    @property
+    def index(self):
+        return self.expressions[2]
+
+    @property
+    def _repr_expression_names(self):
+        return "value", "separator", "index"
+
+
+class SePayloadIfEndsWithJongseong(SePayload, payload_type=SePayloadType.IfEndsWithJongseong, count=(3, 3)):
+    @property
+    def text(self):
+        return self.expressions[0]
+
+    @property
+    def true_value(self):
+        return self.expressions[1]
+
+    @property
+    def false_value(self):
+        return self.expressions[2]
+
+    @property
+    def _repr_expression_names(self):
+        return "text", "true", "false"
+
+
+class SePayloadIfEndsWithJongseongExceptRieul(SePayload, payload_type=SePayloadType.IfEndsWithJongseongExceptRieul,
+                                              count=(3, 3)):
+    @property
+    def text(self):
+        return self.expressions[0]
+
+    @property
+    def true_value(self):
+        return self.expressions[1]
+
+    @property
+    def false_value(self):
+        return self.expressions[2]
+
+    @property
+    def _repr_expression_names(self):
+        return "text", "true", "false"
+
+
+class SePayloadDialoguePageSeparator(SePayload, payload_type=SePayloadType.DialoguePageSeparator, count=(1, 1)):
+    # Possible forced page separator
+    #
+    # 여기선 모험가 길드에 소속된 사람들에게<br />
+    # &#x27;길드 의뢰&#x27;를 발행하고 있어.<br />
+    # <SePayload type="DialoguePageSeparator" />당신이 <switch /> 님께<br />
+    # 의뢰를 받을 수 있게 되면<br />
+    # 일자리를 알선해줄게.
+    pass
+
+
+class SePayloadActorFullName(SePayload, payload_type=SePayloadType.ActorFullName, count=(1, 1)):
+    # Possible actor full name
+    #
+    # Looks like <0x0a value="(IntegerParameter=1)" /> fished up Lady Luck herself! Here comes a spectral current!
+    pass
+
+
+class SePayloadX19(SePayload, payload_type=SePayloadType.X19, count=(1, 1)):
+    # Oh. Well that was...<i>something</i>. I guess. <0x19 value="1" />...Do you want to play again?
+    pass
+
+
+class SePayloadX1b(SePayload, payload_type=SePayloadType.X1b, count=(1, 1)):
+    # Used in QuickChatTransient
+    pass
+
+
+class SePayloadX1c(SePayload, payload_type=SePayloadType.X1c, count=(1, 1)):
+    # Used in QuickChatTransient
+    pass
+
+
+class SePayloadX16(SePayload, payload_type=SePayloadType.X16, count=(0, 0)):
+    pass
+
+
+class SePayloadX26(SePayload, payload_type=SePayloadType.X26, count=(3, 3)):
+    pass
+
+
+class SePayloadX2d(SePayload, payload_type=SePayloadType.X2d, count=(1, 1)):
+    pass
+
+
+class SePayloadX2f(SePayload, payload_type=SePayloadType.X2f, count=(1, 1)):
+    pass
+
+
+class SePayloadX60(SePayload, payload_type=SePayloadType.X60, count=(1, None)):
+    pass
+
+
+class SePayloadX61(SePayload, payload_type=SePayloadType.X61, count=(1, 1)):
+    pass
 
 
 class SeString:
@@ -672,52 +1015,60 @@ class SeString:
 
     _escaped: typing.Optional[bytes] = None
     _parsed: typing.Optional[str] = None
-    _components: typing.Optional[typing.Tuple[SePayload]] = None
+    _payloads: typing.Optional[typing.Tuple[SePayload]] = None
 
     def __init__(self, data: typing.Union['SeString', bytes, bytearray, memoryview, str] = b"",
-                 *components: SePayload):
+                 *payloads: SePayload, sheet_reader: typing.Optional[SHEET_READER] = None):
+        self._sheet_reader = sheet_reader
+
         if isinstance(data, SeString):
             self._escaped = data._escaped
             self._parsed = data._parsed
-            self._components = data._components
+            self._payloads = data._payloads
 
         elif isinstance(data, str):
-            component_count = data.count(SeString.START_BYTE_STR)
-            if component_count != len(components):
-                raise ValueError(f"Number of provided components({len(components)})"
-                                 f" does not match the number of expected components({component_count})")
+            payload_count = data.count(SeString.START_BYTE_STR)
+            if payload_count != len(payloads):
+                raise ValueError(f"Number of provided payloads({len(payloads)})"
+                                 f" does not match the number of expected payloads({payload_count})")
             self._parsed = data
-            self._components = components
-            components = None
+            self._payloads = payloads
+            payloads = None
 
         elif isinstance(data, (bytes, bytearray, memoryview)):
             self._escaped = None if data is None else bytes(data)
 
-        if components:
-            if len(components) == len(self):
-                self._components = components
+        if payloads:
+            if len(payloads) == len(self):
+                self._payloads = payloads
             else:
-                raise ValueError(f"Number of provided components({len(components)})"
-                                 f" does not match the number of expected components({len(self)}).")
+                raise ValueError(f"Number of provided payloads({len(payloads)})"
+                                 f" does not match the number of expected payloads({len(self)}).")
+
+    def set_sheet_reader(self, reader: SHEET_READER):
+        self._sheet_reader = reader
+        if self._payloads is not None:
+            for payload in self._payloads:
+                payload.set_sheet_reader(reader)
 
     def __bytes__(self):
         if self._escaped is not None:
             return self._escaped
 
         escaped = bytearray()
-        component_index = 0
+        payload_index = 0
         for r in self._parsed.encode("utf-8"):
             escaped.append(r)
             if r != SeString.START_BYTE:
                 continue
 
-            component = self._components[component_index]
-            escaped_payload = bytes(component)
-            escaped.append(component.type)
+            payload = self._payloads[payload_index]
+            escaped_payload = bytes(payload)
+            escaped.append(payload.type)
             escaped.extend(bytes(SeExpressionUint32(len(escaped_payload))))
             escaped.extend(escaped_payload)
             escaped.append(SeString.END_BYTE)
-            component_index += 1
+            payload_index += 1
 
         self._escaped = bytes(escaped)
         return self._escaped
@@ -731,15 +1082,15 @@ class SeString:
 
     def __getitem__(self, item):
         self._parse()
-        return self._components[item]
+        return self._payloads[item]
 
     def __len__(self):
         self._parse()
-        return len(self._components)
+        return len(self._payloads)
 
     def __iter__(self):
         self._parse()
-        return iter(self._components)
+        return iter(self._payloads)
 
     def _parse(self):
         if self._parsed is not None:
@@ -747,7 +1098,7 @@ class SeString:
 
         i = 0
         parsed = bytearray()
-        components: typing.List[SePayload] = []
+        payloads: typing.List[SePayload] = []
         while i < len(self._escaped):
             parsed.append(self._escaped[i])
             i += 1
@@ -755,37 +1106,38 @@ class SeString:
             if parsed[-1] != SeString.START_BYTE:
                 continue
 
-            escape_type = self._escaped[i]
+            payload_type = self._escaped[i]
             i += 1
 
-            data_len = SeExpression.from_buffer_copy(self._escaped, i)
+            data_len = SeExpression.from_buffer_copy(self._escaped, i, self._sheet_reader)
             i += len(bytes(data_len))
 
-            component = self._escaped[i:i + data_len]
-            if len(component) != data_len:
-                raise ValueError("Incomplete component")
+            payload_bytes = self._escaped[i:i + data_len]
+            if len(payload_bytes) != data_len:
+                raise ValueError("Incomplete payload")
             i += data_len
 
             if self._escaped[i] != SeString.END_BYTE:
                 raise ValueError("End byte not found")
             i += 1
 
-            components.append(SePayload.from_bytes(SePayloadType(escape_type), component))
+            payloads.append(SePayload.from_bytes(payload_bytes, SePayloadType(payload_type),
+                                                 sheet_reader=self._sheet_reader))
 
         self._parsed = parsed.decode("utf-8")
-        self._components = tuple(components)
+        self._payloads = tuple(payloads)
 
     def __repr__(self):
         self._parse()
         if self._parsed is None:
             return "(None)"
-        if not self._components:
+        if not self._payloads:
             return self._parsed
 
         res = []
-        for i, text in enumerate(str(self).split("\x02")):
+        for i, text in enumerate(str(self).split(SeString.START_BYTE_STR)):
             res.append(html.escape(text))
-            if i == len(self._components):  # last item
+            if i == len(self._payloads):  # last item
                 break
 
             res.append(repr(self[i]))

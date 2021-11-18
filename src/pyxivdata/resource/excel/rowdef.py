@@ -66,6 +66,44 @@ class ActionTransientRow(ExdRow):
     description: SeString = 0
 
 
+class CompletionRow(ExdRow):
+    group_id: int = 0
+    key: int = 1
+    lookup_table: SeString = 2
+    text: SeString = 3
+    group_title: SeString = 4
+
+
+class MainCommand(ExdRow):
+    icon_id: int = 0
+    category: int = 1
+    main_command_category_id: int = 2
+    sort_id: int = 3
+    name: SeString = 4
+    description: SeString = 5
+
+
+class MapRow(ExdRow):
+    map_condition_id: int = 0
+    priority_category_ui: int = 1
+    priority_ui: int = 2
+    map_index: int = 3
+    hierarchy: int = 4
+    map_marker_range: int = 5
+    id: SeString = 6
+    size_factor: int = 7
+    offset_x: int = 8
+    offset_y: int = 9
+    placename_region_id: int = 10
+    placename_id: int = 11
+    placename_sub_id: int = 12
+    discovery_index: int = 13
+    discovery_flag: int = 14
+    territory_type_id: int = 15
+    discovery_array_byte: bool = 16
+    is_event: bool = 17
+
+
 class StatusRow(ExdRow):
     class StatusCategory(enum.IntEnum):
         Undefined = 0
