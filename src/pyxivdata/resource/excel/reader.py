@@ -21,7 +21,7 @@ def transform_column(col: ExhColumnDefinition,
                      variable_data: typing.Union[bytes, bytearray, memoryview],
                      sheet_reader: typing.Optional[SHEET_READER] = None
                      ) -> PossibleColumnType:
-    if col.type == ExhColumnDataType.String:
+    if col.type == ExhColumnDataType.SeString:
         string_offset = int.from_bytes(fixed_data[col.offset:col.offset + 4], "big", signed=False)
         return SeString(variable_data[string_offset:variable_data.index(0, string_offset)], sheet_reader=sheet_reader)
     elif col.type == ExhColumnDataType.Bool:

@@ -1,8 +1,11 @@
+import abc
 import ctypes
 import enum
 import functools
-import html
 import typing
+from xml.sax.saxutils import escape, quoteattr
+
+from pyxivdata.common import GameLanguage
 
 if typing.TYPE_CHECKING:
     from pyxivdata.resource.excel.rowdef import ExdRow, CompletionRow, MapRow
@@ -14,7 +17,7 @@ SHEET_READER = typing.Callable[[typing.Union[int, str]], 'ExcelReader']
 class SeExpressionType(enum.IntEnum):
     # https://github.com/xivapi/SaintCoinach/blob/36e9d613f4bcc45b173959eed3f7b5549fd6f540/SaintCoinach/Text/DecodeExpressionType.cs
 
-    # Predefined parameters
+    # Global parameters
     Xd0 = 0xd0
     Xd1 = 0xd1
     Xd2 = 0xd2
@@ -25,12 +28,12 @@ class SeExpressionType(enum.IntEnum):
     Xd7 = 0xd7
     Xd8 = 0xd8
     Xd9 = 0xd9
-    Xda = 0xda
+    Minute = 0xda
     Hour = 0xdb  # 0 ~ 23
-    Xdc = 0xdc
-    Weekday = 0xdd  # 1(sunday) ~ 7(saturday)
-    Xde = 0xde
-    Xdf = 0xdf
+    DayOfMonth = 0xdc
+    DayOfWeek = 0xdd  # 1(sunday) ~ 7(saturday)
+    Month = 0xde
+    Year = 0xdf
 
     # Binary expressions
     GreaterThanOrEqualTo = 0xe0
@@ -66,20 +69,27 @@ class SePayloadType(enum.IntEnum):
     IfEquals = 0x0b
     IfEndsWithJongseong = 0x0c  # 은/는(eun/neun), 이/가(i/ga), or 을/를(Eul/Reul)
     IfEndsWithJongseongExceptRieul = 0x0d  # 로/으로(Ro/Euro)
-    IfPlayer = 0x0e  # "You are"/"Someone Else is"
+    IfActor = 0x0e  # "You are"/"Someone Else is"
     NewLine = 0x0f
-    BitmapFontIcon = 0x11
+    FontIcon = 0x11
     ColorFill = 0x12
     ColorBorder = 0x13
     SoftHyphen = 0x15
-    DialoguePageSeparator = 0x16  # probably
-    Italics = 0x19
+    DialoguePageBreak = 0x16  # probably
+    Italic = 0x19
     Indent = 0x1c
-    Icon2 = 0x1d
+    FontIcon2 = 0x1d
     Hyphen = 0x1e
     Value = 0x1f
     Format = 0x21
     TwoDigitValue = 0x23  # f"{:02}"
+
+    # According to Dalamud (refer to link below), 0x26 exists (0x27 if not treated as SeUint32), but is not found from
+    # network capture of 0a0000.
+    # https://github.com/goatcorp/Dalamud/blob/master/Dalamud/Game/Text/SeStringHandling/Payload.cs
+    # TODO: Does this exist only in game memory?
+    Interactible = 0x26
+
     SheetReference = 0x27
     Highlight = 0x28
     Link = 0x2a
@@ -109,9 +119,21 @@ class SePayloadType(enum.IntEnum):
         return f"{self.name}({self.value:02x})"
 
 
-class SeExpression:
+class HasXmlRepr:
+    @property
+    def xml_repr(self) -> str:
+        raise NotImplementedError
+
+
+class SeExpression(HasXmlRepr, abc.ABC):
+    _xml_tag: typing.ClassVar[str]
+
     _buffer: typing.Optional[bytes] = None
     _sheet_reader: typing.Optional[SHEET_READER] = None
+
+    def __init_subclass__(cls, xml_tag: typing.Optional[str] = None, **kwargs):
+        if xml_tag is not None:
+            cls._xml_tag = xml_tag
 
     def __init__(self, sheet_reader: typing.Optional[SHEET_READER] = None):
         self._sheet_reader = sheet_reader
@@ -145,7 +167,7 @@ class SeExpression:
             self = SeExpressionUint32(value)
 
         elif 0xD0 <= marker <= 0xDF:
-            self = SeExpressionPredefinedParameter(SeExpressionType(marker), sheet_reader)
+            self = SeExpressionGlobalParameter(SeExpressionType(marker), sheet_reader)
 
         elif 0xE0 <= marker <= 0xE5:
             operand1 = SeExpression.from_buffer_copy(data, offset, sheet_reader)
@@ -160,7 +182,7 @@ class SeExpression:
             self = SeExpressionUnary(SeExpressionType(marker), operand, sheet_reader)
 
         elif 0xEC <= marker <= 0xEC:
-            self = SeExpressionPredefinedParameter(SeExpressionType(marker), sheet_reader)  # TODO: what is this?
+            self = SeExpressionGlobalParameter(SeExpressionType(marker), sheet_reader)  # TODO: what is this?
 
         elif 0xF0 <= marker <= 0xFE:
             marker = (marker + 1) & 0xF
@@ -188,7 +210,46 @@ class SeExpression:
         return self
 
 
-class SeExpressionSeString(SeExpression):
+def _to_min_xml(tag_name: str, *values: typing.Union[HasXmlRepr, str],
+                **attrs: typing.Union[typing.Union[HasXmlRepr, str],
+                                      typing.List[typing.Union[HasXmlRepr, str]],
+                                      typing.Tuple[typing.Union[HasXmlRepr, str], ...]]):
+    value = []
+    attr_strs = []
+    for k, v in attrs.items():
+        if v is None:
+            continue
+
+        if isinstance(v, (list, tuple)):
+            if len(v) == 0:
+                continue
+            elif len(v) == 1:
+                v = v[0]
+            else:
+                for v2 in v:
+                    if isinstance(v2, HasXmlRepr):
+                        v2 = v2.xml_repr
+                    value.append(_to_min_xml(k, v2))
+                continue
+
+        if isinstance(v, HasXmlRepr):
+            v = v.xml_repr
+        if "<" in v:
+            value.append(_to_min_xml(k, v))
+        else:
+            attr_strs.append(f" {k}={quoteattr(v)}")
+
+    value = "".join((*value, *(v.xml_repr if isinstance(v, HasXmlRepr) else v for v in values)))
+    attr_str = "".join(attr_strs)
+    if value == "":
+        return f"<{tag_name}{attr_str} />"
+    elif "<" in value:
+        return f"<{tag_name}{attr_str}>{value}</{tag_name}>"
+    else:
+        return f"<{tag_name}{attr_str} value={quoteattr(value)} />"
+
+
+class SeExpressionSeString(SeExpression, xml_tag="expr:str"):
     def __init__(self, data: 'SeString', sheet_reader: typing.Optional[SHEET_READER] = None):
         super().__init__(sheet_reader)
         self._data = data
@@ -203,8 +264,15 @@ class SeExpressionSeString(SeExpression):
     def __repr__(self):
         return repr(self._data)
 
+    @property
+    def xml_repr(self) -> str:
+        xml_repr = self._data.xml_repr
+        if xml_repr[:2].lower() in ("0x", "0o", "0b") or xml_repr.isdigit():
+            return _to_min_xml(self._xml_tag, xml_repr)
+        return xml_repr
 
-class SeExpressionPredefinedParameter(SeExpression):
+
+class SeExpressionGlobalParameter(SeExpression, xml_tag="expr:global"):
     def __init__(self, expression_type: SeExpressionType, sheet_reader: typing.Optional[SHEET_READER] = None):
         super().__init__(sheet_reader)
         self._type = expression_type
@@ -223,23 +291,36 @@ class SeExpressionPredefinedParameter(SeExpression):
     def __repr__(self):
         return f"({self._type.name})"
 
+    @property
+    def xml_repr(self) -> str:
+        return _to_min_xml(self._xml_tag, self.type.name)
+
 
 class SeExpressionPlayerParameters(enum.IntEnum):
     # https://github.com/xivapi/SaintCoinach/blob/36e9d613f4bcc45b173959eed3f7b5549fd6f540/SaintCoinach/Text/Parameters/PlayerParameters.cs
-    PartyChatForegroundColorIndex = 16
-    ActiveClassOrJobIndex = 68
-    LevelIndex1 = 69
-    LevelIndex2 = 72
-    GamePadTypeIndex = 75
-    RegionIndex = 77
+    PartyChatFillColor = 16
+    ActiveClassJob = 68
+    Level1 = 69
+    Level2 = 72
+    GamePadType = 75
+    Region = 77
 
 
-class SeExpressionUnary(SeExpression):
+class SeExpressionUnary(SeExpression, xml_tag="expr:param"):
+    XML_ATTR_NAMES = {
+        SeExpressionType.IntegerParameter: "int",
+        SeExpressionType.PlayerParameter: "player",
+        SeExpressionType.StringParameter: "str",
+        SeExpressionType.ObjectParameter: "obj",
+    }
+
     def __init__(self, expression_type: SeExpressionType, operand: SeExpression,
                  sheet_reader: typing.Optional[SHEET_READER] = None):
         super().__init__(sheet_reader)
         self._type = expression_type
         self._operand = operand
+        if self._type not in self.XML_ATTR_NAMES:
+            raise TypeError(f"Type {self._type} not supported by {self.__class__.__name__}")
 
     @property
     def type(self):
@@ -264,14 +345,39 @@ class SeExpressionUnary(SeExpression):
                 pass
         return f"({self._type.name}={self._operand})"
 
+    @property
+    def xml_repr(self) -> str:
+        try:
+            if self._type == SeExpressionType.PlayerParameter:
+                operand_repr = SeExpressionPlayerParameters(self._operand).name
+            else:
+                raise ValueError
+        except ValueError:
+            operand_repr = self._operand.xml_repr
+        if "<" in operand_repr:
+            return _to_min_xml(self._xml_tag, operand_repr, type=self.XML_ATTR_NAMES[self._type])
+        else:
+            return _to_min_xml(self._xml_tag, **{self.XML_ATTR_NAMES[self._type]: operand_repr})
 
-class SeExpressionBinary(SeExpression):
+
+class SeExpressionBinary(SeExpression, xml_tag="expr:compare"):
+    XML_ATTR_OP_VALUES = {
+        SeExpressionType.GreaterThanOrEqualTo: "ge",
+        SeExpressionType.GreaterThan: "gt",
+        SeExpressionType.LessThanOrEqualTo: "le",
+        SeExpressionType.LessThan: "lt",
+        SeExpressionType.Equal: "eq",
+        SeExpressionType.NotEqual: "ne",
+    }
+
     def __init__(self, expression_type: SeExpressionType, operand1: SeExpression, operand2: SeExpression,
                  sheet_reader: typing.Optional[SHEET_READER] = None):
         super().__init__(sheet_reader)
         self._type = expression_type
         self._operand1 = operand1
         self._operand2 = operand2
+        if expression_type not in self.XML_ATTR_OP_VALUES:
+            raise TypeError(f"Type {self._type} not supported by {self.__class__.__name__}")
 
     @property
     def type(self):
@@ -301,6 +407,13 @@ class SeExpressionBinary(SeExpression):
             op = self._type.name
         return f"({self._operand1}) {op} ({self._operand2})"
 
+    @property
+    def xml_repr(self) -> str:
+        return _to_min_xml(self._xml_tag,
+                           _to_min_xml("left", self._operand1),
+                           _to_min_xml("right", self._operand2),
+                           op=self.XML_ATTR_OP_VALUES[self._type])
+
 
 class SeExpressionUint32(int, SeExpression):
     def __new__(cls, data: int):
@@ -324,8 +437,16 @@ class SeExpressionUint32(int, SeExpression):
             self._buffer = bytes(res)
         return self._buffer
 
+    @property
+    def xml_tag_name(self):
+        return None
 
-class SePayload:
+    @property
+    def xml_repr(self) -> str:
+        return str(int(self))
+
+
+class SePayload(HasXmlRepr):
     _implemented_payload_types: typing.ClassVar[typing.Dict[SePayloadType, typing.Type['SePayload']]] = {}
 
     PAYLOAD_TYPE: typing.ClassVar[typing.Optional[SePayloadType]] = None
@@ -395,6 +516,15 @@ class SePayload:
         self._validate_expression_count_or_throw(len(res))
         return tuple(res)
 
+    def __len__(self):
+        return len(self.expressions)
+
+    def __iter__(self):
+        return iter(self.expressions)
+
+    def __getitem__(self, item):
+        return self.expressions[item]
+
     @property
     def _repr_expression_names(self):
         return "param",
@@ -416,13 +546,13 @@ class SePayload:
         else:
             type_name = f"X{type_name:02x}"
         if not self.expressions:
-            return f"<SePayload type=\"{type_name}\" />"
+            return f"<{type_name} />"
 
         extra = self._repr_extra()
         if extra is not None:
-            res = [f"<SePayload type=\"{type_name}\" representation=\"{html.escape(str(extra))}\">"]
+            res = [f"<{type_name} representation={quoteattr(str(extra))}>"]
         else:
-            res = [f"<SePayload type=\"{type_name}\">"]
+            res = [f"<{type_name}>"]
         names = self._repr_expression_names
         if (len(self.expressions) == self.MIN_EXPRESSION_COUNT
                 and self.MIN_EXPRESSION_COUNT == self.MAX_EXPRESSION_COUNT):
@@ -434,8 +564,16 @@ class SePayload:
                     res.append(f"""<{names[i]}>{repr(v)}</{names[i]}>""")
                 else:
                     res.append(f"""<{names[-1]} index="{2 + i - len(names)}">{repr(v)}</{names[-1]}>""")
-        res.append(f"</SePayload>")
+        res.append(f"</{type_name}>")
         return "".join(res)
+
+    @property
+    def xml_repr(self):
+        ty: typing.Union[int, enum.Enum] = self.type
+        if isinstance(ty, enum.Enum):
+            return _to_min_xml(f"payload:{ty.name}", *self.expressions)
+        else:
+            return _to_min_xml(f"payload:{int(ty):02x}", *self.expressions)
 
 
 class SePayloadUnknown(SePayload):
@@ -447,23 +585,78 @@ class SePayloadUnknown(SePayload):
 
 
 class SePayloadNewLine(SePayload, payload_type=SePayloadType.NewLine, count=(0, 0)):
-    pass
+    @property
+    def xml_repr(self):
+        return _to_min_xml("br")
 
 
 class SePayloadHyphen(SePayload, payload_type=SePayloadType.Hyphen, count=(0, 0)):
-    pass
+    @property
+    def xml_repr(self):
+        return "-"
 
 
 class SePayloadIndent(SePayload, payload_type=SePayloadType.Indent, count=(0, 0)):
+    @property
+    def xml_repr(self):
+        return _to_min_xml("indent")
+
+
+class SePayloadSoftHyphen(SePayload, payload_type=SePayloadType.SoftHyphen, count=(0, 0)):
+    @property
+    def xml_repr(self):
+        return _to_min_xml("wbr")
+
+
+class SePayloadDialoguePageBreak(SePayload, payload_type=SePayloadType.DialoguePageBreak, count=(0, 0)):
+    # Possible forced page separator
+    #
+    # 여기선 모험가 길드에 소속된 사람들에게<br />
+    # '길드 의뢰'를 발행하고 있어.<br />
+    # <pagebreak />당신이 <switch /> 님께<br />
+    # 의뢰를 받을 수 있게 되면<br />
+    # 일자리를 알선해줄게.
     pass
 
 
 class SePayloadUiColorBorder(SePayload, payload_type=SePayloadType.UiColorBorder, count=(1, 1)):
-    pass
+    @property
+    def uicolor_id(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("UiColor:border", self.uicolor_id)
 
 
 class SePayloadUiColorFill(SePayload, payload_type=SePayloadType.UiColorFill, count=(1, 1)):
-    pass
+    @property
+    def uicolor_id(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("UiColor:fill", self.uicolor_id)
+
+
+class SePayloadColorFill(SePayload, payload_type=SePayloadType.ColorFill, count=(1, 1)):
+    @property
+    def color(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Color:fill", self.color)
+
+
+class SePayloadColorBorder(SePayload, payload_type=SePayloadType.ColorBorder, count=(1, 1)):
+    @property
+    def color(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Color:border", self.color)
 
 
 class SePayloadHighlight(SePayload, payload_type=SePayloadType.Highlight, count=(1, 1)):
@@ -471,11 +664,72 @@ class SePayloadHighlight(SePayload, payload_type=SePayloadType.Highlight, count=
 
 
 class SePayloadTwoDigitValue(SePayload, payload_type=SePayloadType.TwoDigitValue, count=(1, 1)):
-    pass
+    @property
+    def value(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Value", self.value, format="02d")
 
 
 class SePayloadValue(SePayload, payload_type=SePayloadType.Value, count=(1, 1)):
+    @property
+    def value(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Value", self.value)
+
+
+class SePayloadTime(SePayload, payload_type=SePayloadType.Time, count=(1, 1)):
     pass
+
+
+class SePayloadItalic(SePayload, payload_type=SePayloadType.Italic, count=(1, 1)):
+    @property
+    def enable(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Italic", self.enable)
+
+
+class SePayloadLink(SePayload, payload_type=SePayloadType.Link, count=(1, 1)):
+    pass
+
+
+class SePayloadFontIcon(SePayload, payload_type=SePayloadType.FontIcon, count=(1, 1)):
+    @property
+    def icon_id(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("FontIcon", self.icon_id)
+
+
+class SePayloadFontIcon2(SePayload, payload_type=SePayloadType.FontIcon2, count=(1, 1)):
+    # apparently this is exchangeable with above
+    @property
+    def icon_id(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("FontIcon2", self.icon_id)
+
+
+class SePayloadActorFullName(SePayload, payload_type=SePayloadType.ActorFullName, count=(1, 1)):
+    @property
+    def actor_id(self):
+        return self.expressions[0]
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("ActorFullName", self.actor_id)
 
 
 class SePayloadZeroPaddedValue(SePayload, payload_type=SePayloadType.ZeroPaddedValue, count=(2, 2)):
@@ -491,13 +745,9 @@ class SePayloadZeroPaddedValue(SePayload, payload_type=SePayloadType.ZeroPaddedV
     def _repr_expression_names(self):
         return "value", "pad"
 
-
-class SePayloadTime(SePayload, payload_type=SePayloadType.Time, count=(1, 1)):
-    pass
-
-
-class SePayloadItalics(SePayload, payload_type=SePayloadType.Italics, count=(1, 1)):
-    pass
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Value", self.value, zeropad=self.pad)
 
 
 class SePayloadFormat(SePayload, payload_type=SePayloadType.Format, count=(2, 2)):
@@ -512,6 +762,10 @@ class SePayloadFormat(SePayload, payload_type=SePayloadType.Format, count=(2, 2)
     @property
     def _repr_expression_names(self):
         return "value", "format"
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Value", self.value, format=self.format)
 
 
 class SePayloadSheetReference(SePayload, payload_type=SePayloadType.SheetReference, count=(2, None)):
@@ -538,8 +792,17 @@ class SePayloadSheetReference(SePayload, payload_type=SePayloadType.SheetReferen
     def _repr_expression_names(self):
         return "sheet", "row", "column", "parameter"
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("SheetRef", sheet=self.sheet_name, row=self.row_id, col=self.column_id,
+                           param=self.parameters)
+
 
 class SePayloadSheetLanguageReference(SePayload, count=(3, None)):
+    @property
+    def language(self) -> GameLanguage:
+        raise NotImplementedError
+
     @property
     def sheet_name(self):
         return self.expressions[0]
@@ -567,25 +830,34 @@ class SePayloadSheetLanguageReference(SePayload, count=(3, None)):
     def _repr_expression_names(self):
         return "sheet", "row", "attribute", "column", "parameter"
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("SheetRef", language=self.language.code, sheet=self.sheet_name, row=self.row_id,
+                           attr=self.attribute, col=self.column_id, param=self.parameters)
+
 
 class SePayloadSheetLanguageReferenceJa(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceJa):
-    pass
+    @property
+    def language(self) -> GameLanguage:
+        return GameLanguage.Japanese
 
 
 class SePayloadSheetLanguageReferenceEn(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceEn):
-    pass
+    @property
+    def language(self) -> GameLanguage:
+        return GameLanguage.English
 
 
 class SePayloadSheetLanguageReferenceDe(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceDe):
-    pass
+    @property
+    def language(self) -> GameLanguage:
+        return GameLanguage.German
 
 
 class SePayloadSheetLanguageReferenceFr(SePayloadSheetLanguageReference, payload_type=SePayloadType.SheetReferenceFr):
-    pass
-
-
-class SePayloadLink(SePayload, payload_type=SePayloadType.Link, count=(1, 1)):
-    pass
+    @property
+    def language(self) -> GameLanguage:
+        return GameLanguage.French
 
 
 class SePayloadIf(SePayload, payload_type=SePayloadType.If, count=(1, None)):
@@ -614,6 +886,11 @@ class SePayloadIf(SePayload, payload_type=SePayloadType.If, count=(1, None)):
     @property
     def _repr_expression_names(self):
         return "condition", "true", "false", "misc"
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("If", condition=self.condition, true=self.true_value, false=self.false_value,
+                           misc=self.misc_values)
 
 
 class SePayloadIfEquals(SePayload, payload_type=SePayloadType.IfEquals, count=(2, None)):
@@ -647,6 +924,11 @@ class SePayloadIfEquals(SePayload, payload_type=SePayloadType.IfEquals, count=(2
     def _repr_expression_names(self):
         return "left", "right", "true", "false", "misc"
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("IfEquals", left=self.left, right=self.right, true=self.true_value, false=self.false_value,
+                           misc=self.misc_values)
+
 
 class SePayloadSwitch(SePayload, payload_type=SePayloadType.Switch, count=(1, None)):
     @property
@@ -661,34 +943,36 @@ class SePayloadSwitch(SePayload, payload_type=SePayloadType.Switch, count=(1, No
     def _repr_expression_names(self):
         return "condition", "case"
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Switch",
+                           *(_to_min_xml("case", case, when=str(i)) for i, case in self.cases.items()),
+                           condition=self.condition)
 
-class SePayloadIfPlayer(SePayload, payload_type=SePayloadType.IfPlayer, count=(3, 3)):
+
+class SePayloadIfActor(SePayload, payload_type=SePayloadType.IfActor, count=(3, 3)):
     @property
     def actor_id(self):
         return self.expressions[0]
 
     @property
-    def player_value(self):
+    def true_value(self):
         return self.expressions[1]
 
     @property
-    def someone_else_value(self):
+    def false_value(self):
         return self.expressions[2]
 
     @property
     def _repr_expression_names(self):
-        return "actor_id", "player", "someone_else"
+        return "condition", "true", "false"
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("IfActor", actor=self.actor_id, true=self.true_value, false=self.false_value)
 
 
-class SePayloadBitmapFontIcon(SePayload, payload_type=SePayloadType.BitmapFontIcon, count=(1, 1)):
-    pass
-
-
-class SePayloadIcon2(SePayload, payload_type=SePayloadType.Icon2, count=(1, 1)):
-    pass
-
-
-class SePayloadPlaceholder(SePayload, payload_type=SePayloadType.Placeholder, count=(2, None)):
+class SePayloadPlaceholder(abc.ABC, SePayload, payload_type=SePayloadType.Placeholder, count=(2, None)):
     def __new__(cls, data: typing.Union[bytearray, bytes, memoryview] = b"",
                 sheet_reader: typing.Optional[SHEET_READER] = None):
         if cls is SePayloadPlaceholder:
@@ -709,6 +993,10 @@ class SePayloadPlaceholder(SePayload, payload_type=SePayloadType.Placeholder, co
     @property
     def _repr_expression_names(self):
         return "group_id", "param"
+
+    @property
+    def xml_repr(self):
+        raise NotImplementedError
 
 
 class SePayloadPlaceholderCompletion(SePayloadPlaceholder, count=(2, 2)):
@@ -747,6 +1035,10 @@ class SePayloadPlaceholderCompletion(SePayloadPlaceholder, count=(2, 2)):
     def _repr_extra(self):
         return self.completion
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Placeholder", group=str(self.group_id), row=self.row_id)
+
 
 class SePayloadPlaceholderComplex(SePayloadPlaceholder, count=(3, None)):
     _complex_type_map: typing.ClassVar[typing.Dict[int, typing.Type['SePayloadPlaceholderComplex']]] = {}
@@ -772,11 +1064,19 @@ class SePayloadPlaceholderComplex(SePayloadPlaceholder, count=(3, None)):
         return self.expressions[1]
 
     @property
+    def complex_params(self):
+        return self.expressions[2:]
+
+    @property
     def _repr_expression_names(self):
-        return "group_id", "complex_type"
+        return "group_id", "complex_type", "complex_params"
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Placeholder", group="complex", type=self.complex_type, param=self.complex_params)
 
 
-class SePayloadPlaceholderMapPositionLink(SePayloadPlaceholderComplex, count=(7, 7), complex_type=3):
+class SePayloadPlaceholderPos(SePayloadPlaceholderComplex, count=(7, 7), complex_type=3):
     @property
     def territory_type_id(self):
         return self.expressions[2]
@@ -851,24 +1151,25 @@ class SePayloadPlaceholderMapPositionLink(SePayloadPlaceholderComplex, count=(7,
     def _repr_expression_names(self):
         return "group_id", "complex_type", "territory_type_id", "map_id", "raw_x", "raw_y", "raw_z"
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Placeholder", group="complex", type="pos",
+                           territory_type=self.territory_type_id, map_id=self.map_id,
+                           x=f"{self.x:.03f}", y=f"{self.y:.03f}", z=f"{self.z:.03f}")
+
 
 class SePayloadPlaceholderSoundEffect(SePayloadPlaceholderComplex, count=(3, 3), complex_type=5):
     @property
     def sound_effect_id(self):
-        # <se.1> = 0, <se.1> = 2, etc.
-        return self.expressions[2]
+        return self.expressions[2] + 1
 
     @property
     def _repr_expression_names(self):
         return "group_id", "complex_type", "sound_effect_id"
 
-
-class SePayloadColorFill(SePayload, payload_type=SePayloadType.ColorFill, count=(1, 1)):
-    pass
-
-
-class SePayloadColorBorder(SePayload, payload_type=SePayloadType.ColorBorder, count=(1, 1)):
-    pass
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Placeholder", group="complex", type="se", se_id=str(self.sound_effect_id))
 
 
 class SePayloadOrdinalValue(SePayload, payload_type=SePayloadType.OrdinalValue, count=(1, 1)):
@@ -895,6 +1196,13 @@ class SePayloadResetTime(SePayload, payload_type=SePayloadType.ResetTime, count=
     def _repr_expression_names(self):
         return "hour_utc9", "weekday"
 
+    @property
+    def xml_repr(self):
+        if len(self.expressions) == 1:
+            return _to_min_xml("ResetTime", hour_utc9=self.hour_utc9)
+        else:
+            return _to_min_xml("ResetTime", hour_utc9=self.hour_utc9, weekday=self.weekday)
+
 
 class SePayloadSplit(SePayload, payload_type=SePayloadType.Split, count=(3, 3)):
     @property
@@ -913,6 +1221,10 @@ class SePayloadSplit(SePayload, payload_type=SePayloadType.Split, count=(3, 3)):
     def _repr_expression_names(self):
         return "value", "separator", "index"
 
+    @property
+    def xml_repr(self):
+        return _to_min_xml("Split", self.value, sep=self.separator, i=self.index)
+
 
 class SePayloadIfEndsWithJongseong(SePayload, payload_type=SePayloadType.IfEndsWithJongseong, count=(3, 3)):
     @property
@@ -930,6 +1242,10 @@ class SePayloadIfEndsWithJongseong(SePayload, payload_type=SePayloadType.IfEndsW
     @property
     def _repr_expression_names(self):
         return "text", "true", "false"
+
+    @property
+    def xml_repr(self):
+        return _to_min_xml("IfEndsWithJongseong", self.text, true=self.true_value, false=self.false_value)
 
 
 class SePayloadIfEndsWithJongseongExceptRieul(SePayload, payload_type=SePayloadType.IfEndsWithJongseongExceptRieul,
@@ -950,24 +1266,9 @@ class SePayloadIfEndsWithJongseongExceptRieul(SePayload, payload_type=SePayloadT
     def _repr_expression_names(self):
         return "text", "true", "false"
 
-
-class SePayloadDialoguePageSeparator(SePayload, payload_type=SePayloadType.DialoguePageSeparator, count=(1, 1)):
-    # Possible forced page separator
-    #
-    # 여기선 모험가 길드에 소속된 사람들에게<br />
-    # '길드 의뢰'를 발행하고 있어.<br />
-    # <SePayload type="DialoguePageSeparator" />당신이 <switch /> 님께<br />
-    # 의뢰를 받을 수 있게 되면<br />
-    # 일자리를 알선해줄게.
-    pass
-
-
-class SePayloadActorFullName(SePayload, payload_type=SePayloadType.ActorFullName, count=(1, 1)):
-    pass
-
-
-class SePayloadSoftHyphen(SePayload, payload_type=SePayloadType.SoftHyphen, count=(0, 0)):
-    pass
+    @property
+    def xml_repr(self):
+        return _to_min_xml("IfEndsWithJongseongExceptRieul", self.text, true=self.true_value, false=self.false_value)
 
 
 class SePayloadX18(SePayload, payload_type=SePayloadType.X18, count=(1, 1)):
@@ -1172,16 +1473,29 @@ class SeString:
 
     def __repr__(self):
         self._parse()
-        if self._parsed is None:
-            return "(None)"
         if not self._payloads:
             return self._parsed
 
         res = []
         for i, text in enumerate(str(self).split(SeString.START_BYTE_STR)):
-            res.append(html.escape(text))
+            res.append(escape(text))
             if i == len(self._payloads):  # last item
                 break
 
             res.append(repr(self[i]))
+        return "".join(res)
+
+    @property
+    def xml_repr(self):
+        self._parse()
+        if not self._payloads:
+            return self._parsed
+
+        res = []
+        for i, text in enumerate(str(self).split(SeString.START_BYTE_STR)):
+            res.append(escape(text))
+            if i == len(self._payloads):  # last item
+                break
+
+            res.append(self[i].xml_repr)
         return "".join(res)

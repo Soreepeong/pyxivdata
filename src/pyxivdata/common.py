@@ -136,6 +136,27 @@ class GameLanguage(enum.IntEnum):
     def __str__(self):
         return f"{self.name}({self.value})"
 
+    @property
+    def code(self):
+        if self == GameLanguage.Undefined:
+            return ""
+        elif self == GameLanguage.Japanese:
+            return "ja"
+        elif self == GameLanguage.English:
+            return "en"
+        elif self == GameLanguage.German:
+            return "de"
+        elif self == GameLanguage.French:
+            return "fr"
+        elif self == GameLanguage.ChineseSimplified:
+            return "chs"
+        elif self == GameLanguage.ChineseTraditional:
+            return "cht"
+        elif self == GameLanguage.Korean:
+            return "ko"
+        else:
+            raise AssertionError
+
 
 class GameRegion(enum.IntEnum):
     Undefined = 0

@@ -4,7 +4,7 @@ import typing
 
 
 class ExhColumnDataType(enum.IntEnum):
-    String = 0x0
+    SeString = 0x0
     Bool = 0x1
     Int8 = 0x2
     UInt8 = 0x3
@@ -25,6 +25,26 @@ class ExhColumnDataType(enum.IntEnum):
     PackedBool5 = 0x1E
     PackedBool6 = 0x1F
     PackedBool7 = 0x20
+
+    @property
+    def is_bool(self):
+        return self in (ExhColumnDataType.Bool, ExhColumnDataType.PackedBool0, ExhColumnDataType.PackedBool1,
+                        ExhColumnDataType.PackedBool2, ExhColumnDataType.PackedBool3, ExhColumnDataType.PackedBool4,
+                        ExhColumnDataType.PackedBool5, ExhColumnDataType.PackedBool6, ExhColumnDataType.PackedBool7)
+
+    @property
+    def is_int(self):
+        return self in (ExhColumnDataType.Int8, ExhColumnDataType.UInt8, ExhColumnDataType.Int16,
+                        ExhColumnDataType.UInt16, ExhColumnDataType.Int32, ExhColumnDataType.UInt32,
+                        ExhColumnDataType.Int64, ExhColumnDataType.UInt64)
+
+    @property
+    def is_float(self):
+        return self == ExhColumnDataType.Float32
+
+    @property
+    def is_string(self):
+        return self == ExhColumnDataType.SeString
 
 
 class ExhDepth(enum.IntEnum):
@@ -92,7 +112,7 @@ class ExdRowHeader(ctypes.BigEndianStructure):
         ("data_size", ctypes.c_uint32),
         ("sub_row_count", ctypes.c_uint16)
     )
-    
+
     data_size: int
     sub_row_count: int
 
