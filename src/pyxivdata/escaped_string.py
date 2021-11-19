@@ -95,6 +95,7 @@ class SePayloadType(enum.IntEnum):
     Link = 0x2a
     Split = 0x2b
     Placeholder = 0x2d
+    Lowercase = 0x2e
     SheetReferenceJa = 0x2f
     SheetReferenceEn = 0x30
     SheetReferenceDe = 0x31
@@ -106,14 +107,13 @@ class SePayloadType(enum.IntEnum):
     OrdinalValue = 0x50  # "1st", "2nd", "3rd", ...
 
     # Following values exist in 0a0000
-    X18 = 0x18
+    X18 = 0x18  # Probably decorative and used to style the text
     X1a = 0x1a  # Used only in QuickChatTransient
     X1b = 0x1b  # Used only in QuickChatTransient
     X25 = 0x25  # Used only in Addon; probably some sort of value with preset format (for int)
     X2c = 0x2c  # Used only in Addon; probably some sort of value with preset format (for string)
-    X2e = 0x2e  # More formatter?
-    X5f = 0x5f  # Takes two values
-    X60 = 0x60  # More formatter?
+    X5f = 0x5f  # Used in quick chat related messages and party informative logs
+    X60 = 0x60  # Probably yet another value formatter
 
     def __str__(self):
         return f"{self.name}({self.value:02x})"
@@ -733,6 +733,10 @@ class SePayloadActorFullName(SePayload, payload_type=SePayloadType.ActorFullName
         return _to_min_xml("ActorFullName", self.actor_id)
 
 
+class SePayloadLowercase(SePayload, payload_type=SePayloadType.Lowercase, count=(1, 1)):
+    pass
+
+
 class SePayloadZeroPaddedValue(SePayload, payload_type=SePayloadType.ZeroPaddedValue, count=(2, 2)):
     @property
     def value(self):
@@ -1296,37 +1300,6 @@ class SePayloadX25(SePayload, payload_type=SePayloadType.X25, count=(3, 3)):
 
 class SePayloadX2c(SePayload, payload_type=SePayloadType.X2c, count=(1, 1)):
     # Addon(32)[164:0] = <SePayload type="X2c"><param>(StringParameter=1)</param></SePayload>
-    pass
-
-
-class SePayloadX2e(SePayload, payload_type=SePayloadType.X2e, count=(1, 1)):
-    # Addon(32)[11054:0] = Attacking <SePayload type="X2e">
-    #   <param>
-    #       <SePayload type="SheetReference">
-    #           <sheet>ClassJob</sheet>
-    #           <row>(IntegerParameter=1)</row>
-    #           <column>0</column>
-    #       </SePayload>
-    #   </param>
-    # </SePayload>! <SePayload type="X5f">
-    #   <param index="1">1</param>
-    #   <param index="2">101</param>
-    # </SePayload>
-    #
-    # DefaultTalk(244)[592700:20] = <SePayload type="Split">
-    #   <value><SePayload type="Highlight"><param>(ObjectParameter=1)</param></SePayload></value>
-    #   <separator> </separator>
-    #   <index>1</index>
-    # </SePayload>, I've thought long about this, and it's finally time to decide on a proper moogle name for you.
-    # I think Mog<SePayload type="X2e">
-    #   <param>
-    #       <SePayload type="Split">
-    #           <value><SePayload type="Highlight"><param>(ObjectParameter=1)</param></SePayload></value>
-    #           <separator> </separator>
-    #           <index>1</index>
-    #       </SePayload>
-    #   </param>
-    # </SePayload> would fit you perfectly, kupo.
     pass
 
 
