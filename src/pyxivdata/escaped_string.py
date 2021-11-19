@@ -298,6 +298,7 @@ class SeExpressionGlobalParameter(SeExpression, xml_tag="expr:global"):
 
 class SeExpressionPlayerParameters(enum.IntEnum):
     # https://github.com/xivapi/SaintCoinach/blob/36e9d613f4bcc45b173959eed3f7b5549fd6f540/SaintCoinach/Text/Parameters/PlayerParameters.cs
+    Gender = 4
     PartyChatFillColor = 16
     ActiveClassJob = 68
     Level1 = 69
@@ -605,7 +606,7 @@ class SePayloadIndent(SePayload, payload_type=SePayloadType.Indent, count=(0, 0)
 class SePayloadSoftHyphen(SePayload, payload_type=SePayloadType.SoftHyphen, count=(0, 0)):
     @property
     def xml_repr(self):
-        return _to_min_xml("wbr")
+        return "\u00ad"  # soft hyphen (&shy;)
 
 
 class SePayloadDialoguePageBreak(SePayload, payload_type=SePayloadType.DialoguePageBreak, count=(0, 0)):
