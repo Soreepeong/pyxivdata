@@ -27,6 +27,8 @@ class ServerIpcOpcodes:
     ChatTell: typing.Optional[int] = 0x0064
     # ServerNoticeShort: typing.Optional[int] = None
     # ServerNotice: typing.Optional[int] = None
+    NpcYell = 0x03d3
+    ContentTextData = 0x03df
 
     PartyList: typing.Optional[int] = 0x0349
     PartyModify: typing.Optional[int] = 0x00a4

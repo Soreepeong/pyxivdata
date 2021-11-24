@@ -1253,3 +1253,55 @@ class IpcPlacePresetWaymark(ctypes.LittleEndianStructure, IpcStructure, opcode_f
 
     def is_visible(self, waymark_type: WaymarkType) -> bool:
         return bool(self.waymark_flags & (1 << waymark_type))
+
+
+class IpcNpcYell(ctypes.LittleEndianStructure, IpcStructure, opcode_field="NpcYell"):
+    _fields_ = (
+        ("actor_id", ctypes.c_uint32),
+        ("unknown_0x004", ctypes.c_uint32),
+        ("name_id", ctypes.c_uint32),  # can be either BNpcName or ENpcResident
+        ("row_id", ctypes.c_uint32),
+        ("unknown_0x010", ctypes.c_uint32),
+        ("unknown_0x014", ctypes.c_uint32),
+        ("unknown_0x018", ctypes.c_uint32),
+        ("unknown_0x01a", ctypes.c_uint32),
+    )
+
+    actor_id: int
+    unknown_0x004: int
+    name_id: int
+    row_id: int
+    unknown_0x010: int
+    unknown_0x014: int
+    unknown_0x018: int
+    unknown_0x01a: int
+
+
+class IpcContentTextData(ctypes.LittleEndianStructure, IpcStructure, opcode_field="ContentTextData"):
+    _fields_ = (
+        ("some_object_id", ctypes.c_uint32),
+        ("unknown_0x004", ctypes.c_uint32),
+        ("actor_id", ctypes.c_uint32),
+        ("unknown_0x00c", ctypes.c_uint32),
+        ("unknown_0x010", ctypes.c_uint32),
+        ("bnpcname_id", ctypes.c_uint32),
+        ("row_id", ctypes.c_uint32),  # can be either PublicContentTextData or InstanceContentTextData
+        ("duration_ms", ctypes.c_uint32),
+        ("unknown_0x020", ctypes.c_uint32),
+        ("unknown_0x024", ctypes.c_uint32),
+        ("unknown_0x028", ctypes.c_uint32),
+        ("unknown_0x02c", ctypes.c_uint32),
+    )
+
+    some_object_id: int
+    unknown_0x004: int
+    actor_id: int
+    unknown_0x00c: int
+    unknown_0x010: int
+    bnpcname_id: int
+    row_id: int
+    duration_ms: int
+    unknown_0x020: int
+    unknown_0x024: int
+    unknown_0x028: int
+    unknown_0x02c: int

@@ -189,7 +189,7 @@ class GameResourceReader:
         res = self.get_excel_row(excel_name, row_id, language)
         if res is None:
             if fallback_format is None:
-                raise
+                raise KeyError
             return SeString(fallback_format.format(row_id))
         if plural_column_index is None or bytes(res[plural_column_index]) == b"":
             return res[column_index]
