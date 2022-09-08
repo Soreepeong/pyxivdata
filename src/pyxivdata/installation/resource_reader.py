@@ -24,7 +24,7 @@ SQPACK_CATEGORY_MAP = {
     "game_script": "0b0000",
     "music": "0c0000",
 }
-EXPAC_DEPENDENT_SQPACKS = ("music", "bg", "cut")
+EXPAC_DEPENDENT_SQPACKS = ("0c0000", "020000", "030000")
 
 
 class GameResourceReader:
@@ -74,6 +74,15 @@ class GameResourceReader:
             sqpack = SQPACK_CATEGORY_MAP[category]
             if sqpack in EXPAC_DEPENDENT_SQPACKS:
                 expac = path_components[1]
+                try:
+                    ind = int(path_components[2][:2], 16)
+                except ValueError:
+                    ind = 0
+                if path_components[1] == 'ffxiv':
+                    expac_ver = 0
+                else:
+                    expac_ver = int(path_components[1][2:], 16)
+                sqpack = f"{sqpack[0:2]}{expac_ver:02x}{ind:02x}"
             else:
                 expac = "ffxiv"
             index_path = self._game_path / "sqpack" / expac / f"{sqpack}.win32.index"
@@ -93,7 +102,7 @@ class GameResourceReader:
                         continue
                     self._readers[path] = SqpackReader(path)
 
-        for reader in self._readers:
+        for reader in self._readers.values():
             reader: SqpackReader
             try:
                 return reader[item]

@@ -43,19 +43,19 @@ class ActionRow(ExdRow):
     action_combo: int = 35
     preserves_combo: bool = 36
     cast_100ms: int = 37
-    recast_100ms: int = 38
-    cooldown_group: int = 39
-    additional_cooldown_group: int = 40
-    max_charges: int = 41
-    attack_type: AttackType = 42
-    aspect: int = 43
-    action_proc_status: int = 44
-    status_gain_self: int = 46
-    class_job_category: int = 48
-    affects_position: int = 51
-    omen: int = 52
-    is_pvp: bool = 53
-    is_player_action: bool = 65
+    recast_100ms: int = 39
+    cooldown_group: int = 40
+    additional_cooldown_group: int = 41
+    max_charges: int = 42
+    attack_type: AttackType = 43
+    aspect: int = 44
+    action_proc_status: int = 45
+    status_gain_self: int = 47
+    class_job_category: int = 49
+    affects_position: int = 52
+    omen: int = 53
+    is_pvp: bool = 55
+    is_player_action: bool = 67
 
 
 class ActionCategoryRow(ExdRow):

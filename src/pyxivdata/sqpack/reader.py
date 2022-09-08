@@ -15,8 +15,8 @@ from pyxivdata.sqpack.structures import SqIndexHeader, SqpackHeader, SqIndexPath
 
 
 class SqIndexReader(typing.ContextManager):
-    _fp1: typing.Union[io.RawIOBase, typing.BinaryIO] = None
-    _fp2: typing.Union[io.RawIOBase, typing.BinaryIO] = None
+    _fp1: typing.Union[io.RawIOBase, typing.BinaryIO]
+    _fp2: typing.Union[io.RawIOBase, typing.BinaryIO]
 
     def __init__(self, index1: typing.Union[str, os.PathLike], index2: typing.Union[str, os.PathLike]):
         self._fp1 = pathlib.Path(index1).open("rb")
@@ -68,11 +68,12 @@ class SqIndexReader(typing.ContextManager):
 
     @functools.cached_property
     def full_path_hash_locators(self) -> typing.Union[ctypes.Array[SqIndexFullHashLocator],
-                                                 typing.Sequence[SqIndexFullHashLocator]]:
+                                                      typing.Sequence[SqIndexFullHashLocator]]:
         self._fp2.seek(self.index2.hash_locator_segment.offset)
-        data = self._fp2.read(self.index2.hash_locator_segment.size)
-        return (SqIndexFullHashLocator * (len(data) // ctypes.sizeof(SqIndexFullHashLocator))
-                ).from_buffer_copy(data)
+        data = (SqIndexFullHashLocator *
+                (self.index2.hash_locator_segment.size // ctypes.sizeof(SqIndexFullHashLocator)))()
+        self._fp2.readinto(data)
+        return data
 
     @functools.cached_property
     def pair_hash_with_text_locators(self) -> typing.Union[ctypes.Array[SqIndexPairHashWithTextLocator],
@@ -84,11 +85,12 @@ class SqIndexReader(typing.ContextManager):
 
     @functools.cached_property
     def full_path_hash_with_text_locators(self) -> typing.Union[ctypes.Array[SqIndexFullHashWithTextLocator],
-                                                           typing.Sequence[SqIndexFullHashWithTextLocator]]:
+                                                                typing.Sequence[SqIndexFullHashWithTextLocator]]:
         self._fp2.seek(self.index2.text_locator_segment.offset)
-        data = self._fp2.read(self.index2.text_locator_segment.size)
-        return (SqIndexFullHashWithTextLocator * (len(data) // ctypes.sizeof(SqIndexFullHashWithTextLocator))
-                ).from_buffer_copy(data)
+        data = (SqIndexFullHashWithTextLocator * (self.index2.text_locator_segment.size //
+                                                  ctypes.sizeof(SqIndexFullHashWithTextLocator)))()
+        self._fp2.readinto(data)
+        return data
 
     @functools.cached_property
     def index1_unknown_segment_3(self) -> bytes:
@@ -201,7 +203,7 @@ class SqpackReader:
             if file.locator.synonym:
                 if not item.has_full_path():
                     raise KeyError(f"{item} found in {self._name}, but is ambiguous")
-                
+
                 files = self.index.pair_hash_with_text_locators
                 i = bisect_left(files, (item.path_hash, item.name_hash), key=lambda x: (x.path_hash, x.name_hash))
                 while (i < len(files)

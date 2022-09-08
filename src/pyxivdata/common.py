@@ -228,6 +228,8 @@ class SqPathSpec:
     def _resolve_hashes_from_full_path(self):
         if self._full_path_hash is not None and self._path_hash is not None and self._name_hash is not None:
             return
+        if self._full_path is None:
+            return
         *path, name = self._full_path.rsplit("/", 1)
         self._path_hash = calculate_path_hash(path[0] if path else "")
         self._name_hash = calculate_path_hash(name)

@@ -59,7 +59,7 @@ class ScdDataOffsets(ctypes.LittleEndianStructure):
         ("sound_entry_offset", ctypes.c_uint32),
         ("table_4_offset", ctypes.c_uint32),
         ("padding_0x014", ctypes.c_uint8 * 4),
-        ("table5_offset", ctypes.c_uint32),
+        ("table_5_offset", ctypes.c_uint32),
         ("unknown_0x01C", ctypes.c_uint8 * 4),
     )
 
@@ -71,7 +71,7 @@ class ScdDataOffsets(ctypes.LittleEndianStructure):
     sound_entry_offset: int
     table_4_offset: int
     padding_0x014: bytearray
-    table5_offset: int
+    table_5_offset: int
     unknown_0x01C: bytearray
 
 

@@ -217,12 +217,12 @@ class Sheet:
 
 
 def parse_sc_ex_def():
-    p = pathlib.Path(r"C:\Users\SP\Documents\git\SaintCoinach\SaintCoinach\Definitions")
+    p = pathlib.Path(r"Z:\GitWorks\SaintCoinach\SaintCoinach\Definitions")
     res = {}
     for d in p.iterdir():
         if d.suffix != ".json":
             continue
-        with d.open("r") as fp:
+        with d.open("r", encoding="utf-8-sig") as fp:
             sheet = Sheet.from_dict(json.load(fp))
         res[sheet.sheet] = sheet
     return res
@@ -233,14 +233,14 @@ def __main__():
 
     db: sqlite3.Connection
     cursor: sqlite3.Cursor
-    with contextlib.closing(sqlite3.connect("Z:/ex.db")) as db:
+    with contextlib.closing(sqlite3.connect("Z:/ex2.db")) as db:
         for language, installation_region in (
-                (GameLanguage.Japanese, GameInstallationRegion.Japan),
+                # (GameLanguage.Japanese, GameInstallationRegion.Japan),
                 (GameLanguage.English, GameInstallationRegion.Japan),
-                (GameLanguage.German, GameInstallationRegion.Japan),
-                (GameLanguage.French, GameInstallationRegion.Japan),
-                (GameLanguage.ChineseSimplified, GameInstallationRegion.MainlandChina),
-                (GameLanguage.Korean, GameInstallationRegion.SouthKorea),
+                # (GameLanguage.German, GameInstallationRegion.Japan),
+                # (GameLanguage.French, GameInstallationRegion.Japan),
+                # (GameLanguage.ChineseSimplified, GameInstallationRegion.MainlandChina),
+                # (GameLanguage.Korean, GameInstallationRegion.SouthKorea),
         ):
             with GameResourceReader(installation=installation_region, default_language=[language]) as game:
                 files = game["exd/root.exl"].data.decode("utf-8").splitlines()[1:]
